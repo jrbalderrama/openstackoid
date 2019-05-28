@@ -1,0 +1,44 @@
+[
+  {
+    "Region": "CloudOne",
+    "Service Type": "compute",
+    "Interface": "public",
+    "URL": "http://192.168.144.247/compute/v2.1"
+  },
+  {
+    "Region": "CloudOne",
+    "Service Type": "image",
+    "Interface": "public",
+    "URL": "http://192.168.144.247/image"
+  },
+  {
+    "Region": "CloudOne",
+    "Service Type": "compute_legacy",
+    "Interface": "public",
+    "URL": "http://192.168.144.247/compute/v2/$(project_id)s"
+  },
+  {
+    "Region": "CloudOne",
+    "Service Type": "placement",
+    "Interface": "public",
+    "URL": "http://192.168.144.247/placement"
+  },
+  {
+    "Region": "CloudOne",
+    "Service Type": "identity",
+    "Interface": "public",
+    "URL": "http://192.168.144.247/identity"
+  },
+  {
+    "Region": "CloudOne",
+    "Service Type": "identity",
+    "Interface": "admin",
+    "URL": "http://192.168.144.247/identity"
+  },
+  {
+    "Region": "CloudOne",
+    "Service Type": "network",
+    "Interface": "public",
+    "URL": "http://192.168.144.247:9696/"
+  }
+]
