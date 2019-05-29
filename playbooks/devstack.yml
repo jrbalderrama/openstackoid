@@ -35,6 +35,7 @@
       - mycli
       - tox
       - virtualenv
+      - dataclasses
       - httpie
     become: true
 
