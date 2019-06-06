@@ -100,12 +100,17 @@ class OidInterpreter:
         scope = False
 
         if 'X-Scope' in req.headers:
-            scope = json.loads(req.headers.get('X-Scope'))
-        elif 'X-Auth-Token' in req.headers \
-             and SCOPE_DELIM in req.headers['X-Auth-Token']:
-            auth_token = req.headers.get('X-Auth-Token')
-            _, auth_scope = auth_token.split(SCOPE_DELIM)
-            scope = json.loads(auth_scope)
+            x_scope_b = req.headers.get('X-Scope')
+            x_scope = str(x_scope_b)
+            scope = json.loads(x_scope)
+            LOG.debug(f"Scope is set to {scope} from X-Scope")
+        elif 'X-Auth-Token' in req.headers:
+            x_auth_token_b = req.headers.get('X-Auth-Token')
+            x_auth_token = str(x_auth_token_b)
+            if SCOPE_DELIM in x_auth_token:
+                _, auth_scope = x_auth_token.split(SCOPE_DELIM)
+                scope = json.loads(auth_scope)
+                LOG.debug(f"Scope is set to {scope} from X-Auth-Token")
 
         LOG.info(f'Find scope {scope} in request headers')
         return scope
@@ -120,10 +125,12 @@ class OidInterpreter:
 
         """
         if token_header_name in req.headers:
-            auth_token = req.headers.get(token_header_name)
-            token, _ = auth_token.split(SCOPE_DELIM)
-            req.headers.update({token_header_name: token})
-            LOG.info(f'Revert {token_header_name} to {token}')
+            auth_token_b = req.headers.get(token_header_name)
+            auth_token = str(auth_token_b)
+            if SCOPE_DELIM in auth_token:
+                token, _ = auth_token.split(SCOPE_DELIM)
+                req.headers.update({token_header_name: token})
+                LOG.info(f'Revert {token_header_name} to {token}')
 
     def interpret(self, req: Request) -> None:
         """Finds & interprets the scope to update `req` if need be.
