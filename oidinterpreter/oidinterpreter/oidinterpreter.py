@@ -102,11 +102,14 @@ class OidInterpreter:
         if 'X-Scope' in req.headers:
             x_scope_b = req.headers.get('X-Scope')
             x_scope = str(x_scope_b)
+            x_scope = x_scope.replace("'", "\"")
             scope = json.loads(x_scope)
             LOG.debug(f"Scope is set to {scope} from X-Scope")
         elif 'X-Auth-Token' in req.headers:
+            # TODO use sanitize from session auth1
             x_auth_token_b = req.headers.get('X-Auth-Token')
             x_auth_token = str(x_auth_token_b)
+            x_auth_token = x_auth_token.replace("'", "\"")
             if SCOPE_DELIM in x_auth_token:
                 _, auth_scope = x_auth_token.split(SCOPE_DELIM)
                 scope = json.loads(auth_scope)
