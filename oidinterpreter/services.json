@@ -40,5 +40,47 @@
     "Service Type": "network",
     "Interface": "public",
     "URL": "http://192.168.144.247:9696/"
+  },
+  {
+    "Region": "CloudTwo",
+    "Service Type": "compute",
+    "Interface": "public",
+    "URL": "http://192.168.144.248/compute/v2.1"
+  },
+  {
+    "Region": "CloudTwo",
+    "Service Type": "identity",
+    "Interface": "admin",
+    "URL": "http://192.168.144.248/identity"
+  },
+  {
+    "Region": "CloudTwo",
+    "Service Type": "image",
+    "Interface": "public",
+    "URL": "http://192.168.144.248/image"
+  },
+  {
+    "Region": "CloudTwo",
+    "Service Type": "identity",
+    "Interface": "public",
+    "URL": "http://192.168.144.248/identity"
+  },
+  {
+    "Region": "CloudTwo",
+    "Service Type": "network",
+    "Interface": "public",
+    "URL": "http://192.168.144.248:9696/"
+  },
+  {
+    "Region": "CloudTwo",
+    "Service Type": "compute_legacy",
+    "Interface": "public",
+    "URL": "http://192.168.144.248/compute/v2/$(project_id)s"
+  },
+  {
+    "Region": "CloudTwo",
+    "Service Type": "placement",
+    "Interface": "public",
+    "URL": "http://192.168.144.248/placement"
   }
 ]
