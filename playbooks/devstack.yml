@@ -131,6 +131,12 @@
         # at every request.
         [cache]
         enabled = False
+
+        [[post-config|$GLANCE_API_CONF]]
+        # Enable logging for keystone-related libs
+        [DEFAULT]
+        debug = false
+        default_log_levels = keystonemiddleware=DEBUG,keystoneauth=DEBUG
     become: true
     become_user: stack
 

@@ -43,6 +43,10 @@ Vagrant.configure(2) do |config|
     override.vm.synced_folder ".", "/vagrant",
                               owner: "vagrant",
                               group: "vagrant"
+    override.vm.synced_folder "/opt/opendev",
+                              "/opt/opendev",
+                              owner: "vagrant",
+                              group: "vagrant"
 
   end
 

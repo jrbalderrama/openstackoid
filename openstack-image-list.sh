@@ -1,39 +1,49 @@
 #!/bin/bash
 
-DEVSTACK_ONE=http://192.168.144.247
+SCOPE_DELIM="!SCOPE!"
 REDIRECT_SERVER=http://localhost:9000
+DEVSTACK_URL_ONE=http://192.168.144.247
+DEVSTACK_NAME_ONE="CloudOne"
 
-set -x
+#set -x
 ## get token with auth.json file as configuration
 ## token is located in headers
 TOKEN=$(http --headers \
-             ${DEVSTACK_ONE}/identity/v3/auth/tokens \
+             ${DEVSTACK_URL_ONE}/identity/v3/auth/tokens \
              @auth.json | sed '/X-Subject-Token/!d;s/.* //')
 
 ## cleaning new lines
 TOKEN=${TOKEN//[$'\t\r\n']} && TOKEN=${TOKEN%%*( )}
 
-# set -x
-
 # ## test using direct API calls
-# http ${DEVSTACK_ONE}/image/v2/images \
+# http ${DEVSTACK_URL_ONE}/image/v2/images \
 #      X-Auth-Token:${TOKEN} \
 #      X-Identity-Region:InstanceOne \
-#      X-Identity-Url:${DEVSTACK_ONE}/identity
+#      X-Identity-Url:${DEVSTACK_URL_ONE}/identity \
+#      X-Identity-Cloud:${CLOUD_INSTANCE}
 
 # SCOPE="{\"identity\":\"CloudOne\"}"
 
 SCOPE="{\"image\":\"CloudOne\"}"
 
-http --verbose ${DEVSTACK_ONE}/image/v2/images \
-     X-Auth-Token:${TOKEN} \
-     X-Identity-Region:CloudOne \
-     X-Scope:${SCOPE} \
-     X-Identity-Url:${DEVSTACK_ONE}/identity
+http --verbose ${DEVSTACK_URL_ONE}/image/v2/images \
+     X-Auth-Token:"${TOKEN}${SCOPE_DELIM}${SCOPE}" \
+     X-Identity-Region:${DEVSTACK_NAME_ONE} \
+     X-Identity-Url:${DEVSTACK_URL_ONE}/identity \
+     X-Identity-Cloud:${DEVSTACK_NAME_ONE}
+
+
+# http --verbose ${DEVSTACK_URL_ONE}/image/v2/images \
+#      X-Auth-Token:${TOKEN} \
+#      X-Identity-Region:${CLOUD_INSTANCE} \
+#      X-Scope:${SCOPE} \
+#      X-Identity-Url:${DEVSTACK_URL_ONE}/identity \
+#      X-Identity-Cloud:${CLOUD_INSTANCE}
+
 
 # ## test using glance client call
 # glance --verbose -d --os-auth-token=${TOKEN} \
-#        --os-image-url=${DEVSTACK_ONE}/image \
+#        --os-image-url=${DEVSTACK_URL_ONE}/image \
 #        image-list
 
 # ## test using direct API calls with redirects (verbose)
@@ -41,7 +51,7 @@ http --verbose ${DEVSTACK_ONE}/image/v2/images \
 #      ${REDIRECT_SERVER}/image/v2/images \
 #      X-Auth-Token:${TOKEN} \
 #      X-Identity-Region:InstanceOne \
-#      X-Identity-Url:${DEVSTACK_ONE}/identity
+#      X-Identity-Url:${DEVSTACK_URL_ONE}/identity
 #
 # ## test using glance client call with redirects (verbose)
 # #--os-image-api-version=2

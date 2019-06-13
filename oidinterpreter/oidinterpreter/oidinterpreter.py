@@ -14,6 +14,7 @@ import os
 from typing import (Callable, Dict, List, NewType, Union)
 from urllib.parse import urlparse
 
+from keystoneauth1 import session
 from requests import Request
 
 
@@ -98,24 +99,22 @@ class OidInterpreter:
 
         """
         scope = False
+        scope_value = None
+        headers = session._sanitize_headers(req.headers)
+        if "X-Scope" in headers:
+            scope_value = headers.get("X-Scope")
+            LOG.debug("Scope set from X-Scope")
+        elif "X-Auth-Token" in headers:
+            token = headers.get("X-Auth-Token")
+            if SCOPE_DELIM in token:
+                _, scope_value = token.split(SCOPE_DELIM)
+                LOG.debug("Scope set from X-Auth-Token")
 
-        if 'X-Scope' in req.headers:
-            x_scope_b = req.headers.get('X-Scope')
-            x_scope = str(x_scope_b)
-            x_scope = x_scope.replace("'", "\"")
-            scope = json.loads(x_scope)
-            LOG.debug(f"Scope is set to {scope} from X-Scope")
-        elif 'X-Auth-Token' in req.headers:
-            # TODO use sanitize from session auth1
-            x_auth_token_b = req.headers.get('X-Auth-Token')
-            x_auth_token = str(x_auth_token_b)
-            x_auth_token = x_auth_token.replace("'", "\"")
-            if SCOPE_DELIM in x_auth_token:
-                _, auth_scope = x_auth_token.split(SCOPE_DELIM)
-                scope = json.loads(auth_scope)
-                LOG.debug(f"Scope is set to {scope} from X-Auth-Token")
+        if scope_value:
+            scope_value = scope_value.replace("'", "\"")
+            scope = json.loads(scope_value)
+            LOG.info(f"Scope got from headers: {scope}")
 
-        LOG.info(f'Find scope {scope} in request headers')
         return scope
 
     def clean_token_header(self, req: Request, token_header_name: str) -> None:
@@ -127,9 +126,9 @@ class OidInterpreter:
         token (e.g., X-Auth-Token, X-Subject-Token).
 
         """
-        if token_header_name in req.headers:
-            auth_token_b = req.headers.get(token_header_name)
-            auth_token = str(auth_token_b)
+        headers = session._sanitize_headers(req.headers)
+        if token_header_name in headers:
+            auth_token = headers.get(token_header_name)
             if SCOPE_DELIM in auth_token:
                 token, _ = auth_token.split(SCOPE_DELIM)
                 req.headers.update({token_header_name: token})
