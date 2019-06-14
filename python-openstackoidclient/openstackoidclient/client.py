@@ -132,7 +132,7 @@ def mkeypatch_initialize_app(cls, argv):
 
     if isinstance(shell_scope, dict):
         os_scope.update(shell_scope)
-    elif isinstance(shell_scope, basestring):
+    elif isinstance(shell_scope, str):
         try:
             os_scope.update(json.loads(shell_scope))
         except ValueError:
