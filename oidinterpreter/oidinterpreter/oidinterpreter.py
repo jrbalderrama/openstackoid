@@ -184,7 +184,8 @@ class OidInterpreter:
                 'X-Identity-Url': id_service.url,
             })
         except StopIteration:
-            pass
+            LOG.error(f"Invalid identity scope: {scope['identity']}")
+            raise ValueError
 
     def iinterpret(self, req: Request) -> Request:
         "Immutable version of `interpret`."
