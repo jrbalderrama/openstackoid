@@ -3,7 +3,9 @@
 SCOPE_DELIM="!SCOPE!"
 REDIRECT_SERVER=http://localhost:9000
 DEVSTACK_URL_ONE=http://192.168.144.247
+DEVSTACK_URL_TWO=http://192.168.144.248
 DEVSTACK_NAME_ONE="CloudOne"
+DEVSTACK_NAME_TWO="CloudTwo"
 
 #set -x
 ## get token with auth.json file as configuration
@@ -26,12 +28,18 @@ TOKEN=${TOKEN//[$'\t\r\n']} && TOKEN=${TOKEN%%*( )}
 
 SCOPE="{\"image\":\"CloudOne\"}"
 
-http --verbose ${DEVSTACK_URL_ONE}/image/v2/images \
-     X-Auth-Token:"${TOKEN}${SCOPE_DELIM}${SCOPE}" \
-     X-Identity-Region:${DEVSTACK_NAME_ONE} \
-     X-Identity-Url:${DEVSTACK_URL_ONE}/identity \
-     X-Identity-Cloud:${DEVSTACK_NAME_ONE}
+# http --verbose ${DEVSTACK_URL_ONE}/image/v2/images \
+#      X-Auth-Token:"${TOKEN}${SCOPE_DELIM}${SCOPE}" \
+#      X-Identity-Region:${DEVSTACK_NAME_ONE} \
+#      X-Identity-Url:${DEVSTACK_URL_ONE}/identity \
+#      X-Identity-Cloud:${DEVSTACK_NAME_ONE}
 
+glance -vvv --debug \
+       --os-region-name=${DEVSTACK_NAME_ONE} \
+       --os-auth-url=${DEVSTACK_URL_ONE}/identity \
+       --os-auth-token=${TOKEN}${SCOPE_DELIM}${SCOPE} \
+       --os-image-url=${DEVSTACK_URL_ONE}/image \
+       image-list
 
 # http --verbose ${DEVSTACK_URL_ONE}/image/v2/images \
 #      X-Auth-Token:${TOKEN} \
@@ -71,7 +79,7 @@ http --verbose ${DEVSTACK_URL_ONE}/image/v2/images \
 
 
 
-
+# tail -f /var/log/syslog| grep devstack@g-api.service|grep -e "POST\|curl" -i -C2
 
 
 

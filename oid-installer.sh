@@ -1,4 +1,3 @@
-File Edit Options Buffers Tools Sh-Script Help
 #!/bin/bash
 
 OID_DIR=/vagrant
