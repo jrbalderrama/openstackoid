@@ -7,23 +7,26 @@
 # Make your OpenStacks Collaborative
 
 import copy
-from dataclasses import dataclass
 import json
 import logging
 import os
-from typing import (Callable, Dict, List, NewType, Union)
-from urllib.parse import urlparse
 
-from keystoneauth1 import session
+from dataclasses import dataclass
+from typing import (Callable, Dict, List, NewType, Union)
 from requests import Request
+from urllib import parse
+
+from .utils import scope, session
 
 
 # A service contains `Interface`, `Region`, `Service Type`, and `URL` keys.
 Scope = NewType('Scope', Dict[str, str])
 
-logging.basicConfig()
+# logging.basicConfig()
 LOG = logging.getLogger(__name__)
+
 SCOPE_DELIM = "!SCOPE!"
+
 SCOPE_INTERPRETERS = {}
 
 
@@ -90,32 +93,36 @@ class OidInterpreter:
         finally:
             return service
 
-    def get_scope(self, req: Request) -> Union[Scope, "False"]:
-        """Finds the Scope from the current Request.
+    def get_scope(self, req: Request) -> Scope:
+        """Finds the Scope from the current Request or set one by default.
 
         Seeks for the Scope in headers of `req`. Looks first into `X-Scope`,
         then into `X-Auth-Token` delimited by `SCOPE_DELIM`. Returns either the
-        scope if found or False otherwise.
+        scope if found or a default scope containing the values of the local
+        cloud otherwise.
 
         """
-        scope = False
-        scope_value = None
-        headers = session._sanitize_headers(req.headers)
+        final_scope = scope.get_default_scope()
+        headers = session.sanitize_headers(req.headers)
         if "X-Scope" in headers:
             scope_value = headers.get("X-Scope")
+            current_scope = json.loads(scope_value)
+            final_scope = dict(final_scope, **current_scope)
+            req.headers.update({ "X-Scope": json.dumps(final_scope) })
             LOG.debug("Scope set from X-Scope")
         elif "X-Auth-Token" in headers:
             token = headers.get("X-Auth-Token")
             if SCOPE_DELIM in token:
-                _, scope_value = token.split(SCOPE_DELIM)
+                token, scope_value = token.split(SCOPE_DELIM)
+                current_scope = json.loads(scope_value)
+                final_scope = dict(final_scope, **current_scope)
                 LOG.debug("Scope set from X-Auth-Token")
 
-        if scope_value:
-            scope_value = scope_value.replace("'", "\"")
-            scope = json.loads(scope_value)
-            LOG.info(f"Scope got from headers: {scope}")
+            auth_scope = f"{token}{SCOPE_DELIM}{json.dumps(final_scope)}"
+            req.headers.update({ "X-Auth-Token": auth_scope })
 
-        return scope
+        LOG.info(f"Scope got from headers: {final_scope}")
+        return final_scope
 
     def clean_token_header(self, req: Request, token_header_name: str) -> None:
         """Cleans the token of `token_header_name` from the Scope in `req`.
@@ -126,12 +133,12 @@ class OidInterpreter:
         token (e.g., X-Auth-Token, X-Subject-Token).
 
         """
-        headers = session._sanitize_headers(req.headers)
+        headers = session.sanitize_headers(req.headers)
         if token_header_name in headers:
             auth_token = headers.get(token_header_name)
             if SCOPE_DELIM in auth_token:
                 token, _ = auth_token.split(SCOPE_DELIM)
-                req.headers.update({token_header_name: token})
+                req.headers.update({ token_header_name: token })
                 LOG.info(f'Revert {token_header_name} to {token}')
 
     def interpret(self, req: Request) -> None:
@@ -143,9 +150,10 @@ class OidInterpreter:
         scope = self.get_scope(req)
         service = self.is_scoped_url(req)
 
-        # The current request doesn't have a scope or doesn't target a scoped
-        # service, so we don't change the request
-        if not scope or not service:
+        # The current request doesn't target a scoped service,
+        # so we don't change the request
+        if not service:
+            LOG.debug("Any scoped service found for the request")
             return
 
         # Find the targeted cloud
@@ -204,7 +212,7 @@ def get_oidinterpreter(services_uri: str) -> OidInterpreter:
 
     """
     services = []
-    uri = urlparse(services_uri)
+    uri = parse.urlparse(services_uri)
 
     if uri not in SCOPE_INTERPRETERS:
         # Interpret the uri to get the service list. E.g.,
