@@ -8,8 +8,8 @@
 
 import json
 import logging
-import requests
 
+from requests import Session
 from typing import Dict
 from urllib import parse
 
@@ -18,11 +18,9 @@ import six
 from ..oidinterpreter import get_oidinterpreter
 
 
+logger = logging.getLogger(__name__)
+
 SERVICES_CATALOG_PATH = "file:///vagrant/oidinterpreter/services.json"
-
-LOG = logging.getLogger(__name__)
-
-requests.sessions.Session.old_send = requests.sessions.Session.send
 
 
 # adapted using: 'from keystoneauth1.session import _sanitize_headers'
@@ -49,17 +47,17 @@ def sanitize_headers(headers: Dict) -> Dict[str, str]:
     return str_dict
 
 
-def _override_send(self, request, **kwargs):
+# Monkey patch `Session.send` to add interpreter mechanism of openstackoid
+session_send = Session.send
+
+
+def _session_send_monkey_patch(cls, request, **kwargs):
+    logger.warning("Patching session send with OidInterpreter")
     interpreter = get_oidinterpreter(SERVICES_CATALOG_PATH)
-    final_request = interpreter.iinterpret(request)
-    LOG.debug(f"FINAL request headers: {final_request.headers}")
-    return self.old_send(final_request, **kwargs)
-
-
-def _request_monkey_patch() -> None:
-    LOG.warning("Patching request with oidinterpreter")
-    requests.sessions.Session.send = _override_send
+    _request = interpreter.iinterpret(request)
+    logger.debug(f"FINAL request headers: {_request.headers}")
+    return session_send(cls, _request, **kwargs)
 
 
 # magic happens here!
-_request_monkey_patch()
+Session.send = _session_send_monkey_patch
