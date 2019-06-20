@@ -24,21 +24,25 @@ Adds `--os-scope` global parameter:
 
 import json
 import logging
-from osc_lib import utils
+
+from requests import Session
+from osc_lib import shell
+
+from oidinterpreter.utils import scope
 
 
-LOG = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_API_VERSION = '1'
 
-# Required by the OSC plugin interface
+# API options required by the OSC plugin interface
 API_NAME = 'openstackoid'
-API_VERSION_OPTION = 'os_openstackoid_api_version'
-API_VERSIONS = {
-    '1': 'openstackoidclient.client',
-}
 
-DEFAULT_OS_REGION_NAME = "RegionOne"
+API_VERSION_OPTION = 'os_openstackoid_api_version'
+
+API_VERSIONS = { '1': 'openstackoidclient.client' }
 
 
 # Required by the OSC plugin interface
@@ -52,14 +56,16 @@ def build_option_parser(parser):
     :param argparse.ArgumentParser parser: The parser object that has been
         initialized by OpenStackShell.
     """
-    def _fmt_doc(service):
-        return ("%s (Env: OS_SCOPE_%s | OS_REGION_NAME)" %
-                (DEFAULT_OS_REGION_NAME, service.upper()))
+    def _fmt_doc(service_name):
+        return (
+            f"{scope.DEFAULT_CLOUD_NAME} "
+            f"(Env: OS_SCOPE_{service_name.upper()} | OS_REGION_NAME)")
+
 
     parser.add_argument(
         '--os-scope',
         metavar='<os_scope>',
-        default=_get_default_os_scope(),
+        default=scope.get_default_scope(),
         help=("OpenStackoid Scope, "
               "default='%s'"
               % json.dumps({
@@ -72,39 +78,6 @@ def build_option_parser(parser):
     return parser
 
 
-def _get_os_scope_service_env(service):
-    """Lookup for `OS_SCOPE_<service>` or `OS_REGION_NAME` env variables.
-
-    If neither OS_SCOPE_<service> or OS_REGION_NAME are available, then this
-    function returns the value of `DEFAULT_OS_REGION_NAME`.
-
-    """
-    env_name = "OS_SCOPE_%s" % service.upper()
-    default = {'default': DEFAULT_OS_REGION_NAME}
-
-    return utils.env(env_name, 'OS_REGION_NAME', **default)
-
-
-def _get_default_os_scope():
-    """Compute the default scope.
-
-    Something like:
-    {
-      "compute": "OS_SCOPE_COMPUTE | OS_REGION_NAME",
-      "identity": "OS_SCOPE_IDENTITY | OS_REGION_NAME",
-      "image": "OS_SCOPE_IMAGE | OS_REGION_NAME",
-      "network": "OS_SCOPE_NETWORK | OS_REGION_NAME",
-      "placement": "OS_SCOPE_PLACEMENT | OS_REGION_NAME",
-    }"""
-    return {
-        "compute": _get_os_scope_service_env('compute'),
-        "identity": _get_os_scope_service_env('identity'),
-        "image": _get_os_scope_service_env('image'),
-        "network": _get_os_scope_service_env('network'),
-        "placement": _get_os_scope_service_env('placement')
-    }
-
-
 # -- 🐒 Monkey Patching 🐒
 OS_SCOPE = None
 
@@ -112,11 +85,10 @@ OS_SCOPE = None
 #
 # See,
 # https://github.com/openstack/osc-lib/blob/aaf18dad8dd0b73db31aa95a6f2fce431c4cafda/osc_lib/shell.py#L390
-from osc_lib import shell
+initialize_app = shell.OpenStackShell.initialize_app
 
 
-init_app = shell.OpenStackShell.initialize_app
-def mkeypatch_initialize_app(cls, argv):
+def _os_shell_monkey_patch(cls, argv):
     """Get the `os-scope` at the initialization of the app.
 
     Get the `os-scope` and put it into the `OS_SCOPE` global variable for
@@ -125,7 +97,7 @@ def mkeypatch_initialize_app(cls, argv):
     """
     global OS_SCOPE
 
-    os_scope = _get_default_os_scope()
+    os_scope = scope.get_default_scope()
     shell_scope = cls.options.os_scope
     error_msg = ('--os-scope is not valid. see, '
                  '`openstack --help|fgrep -A 8 -- --os-scope`')
@@ -141,7 +113,7 @@ def mkeypatch_initialize_app(cls, argv):
         raise ValueError(error_msg)
 
     OS_SCOPE = os_scope
-    LOG.info("Save the current os-scope: ", OS_SCOPE)
+    logger.info("Save the current os-scope: ", OS_SCOPE)
 
     # XXX(rcherrueau): We remove the `os_scope` from the list of command
     # options (i.e., `cls.options`). We have to do so because of openstack
@@ -159,8 +131,10 @@ def mkeypatch_initialize_app(cls, argv):
     # https://docs.openstack.org/keystone/rocky/configuration/samples/policy-yaml.html
     del cls.options.os_scope
 
-    return init_app(cls, argv)
-shell.OpenStackShell.initialize_app = mkeypatch_initialize_app
+    return initialize_app(cls, argv)
+
+
+shell.OpenStackShell.initialize_app = _os_shell_monkey_patch
 
 
 # 2. Monkey patch `Session.request` to piggyback the scope with the keystone
@@ -168,25 +142,28 @@ shell.OpenStackShell.initialize_app = mkeypatch_initialize_app
 #
 # See,
 # https://github.com/requests/requests/blob/64bde6582d9b49e9345d9b8df16aaa26dc372d13/requests/sessions.py#L466
-from requests import Session
-
 session_request = Session.request
-def mkeypatch_session_request(cls, method, url, **kwargs):
+
+
+def _session_request_monkey_patch(cls, method, url, **kwargs):
     """Piggyback the `OS_SCOPE` on `X-Auth-Token`."""
-    # Retrieve headers of the request
-    headers = kwargs.get('headers', {})
 
-    # Put the scope in X-Scope header
-    if OS_SCOPE:
-        LOG.info("Find a os-scope %s..." % OS_SCOPE)
-        os_scope_json = json.dumps(OS_SCOPE)
-        headers['X-Scope'] = os_scope_json
+    logger.warning("Patching session request")
+    headers = kwargs.get("headers", {})
 
-        # Piggyback OS_SCOPE with X-Auth-Token
-        if 'X-Auth-Token' in headers:
-            LOG.info("...to piggyback on token %s " % headers['X-Auth-Token'])
-            headers['X-Auth-Token'] = "%s!SCOPE!%s" % (headers['X-Auth-Token'], os_scope_json)
-            LOG.debug("Piggyback os-scope %s" % repr(headers))
+    # Put the scope in X-Scope header (there is always a scope)
+    logger.info(f"Set the X-Scope header with {OS_SCOPE}...")
+    scope_value = json.dumps(OS_SCOPE)
+    headers["X-Scope"] = scope_value
+
+    # Piggyback OS_SCOPE with X-Auth-Token
+    if "X-Auth-Token" in headers:
+        token = headers["X-Auth-Token"]
+        logger.info(f"...to piggyback on token {token}")
+        headers['X-Auth-Token'] = f"{token}!SCOPE!{scope_value}"
+        logger.debug(f"Piggyback os-scope {repr(headers)}")
 
     return session_request(cls, method, url, **kwargs)
-Session.request = mkeypatch_session_request
+
+
+Session.request = _session_request_monkey_patch
