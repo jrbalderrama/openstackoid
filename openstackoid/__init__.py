@@ -5,3 +5,13 @@
 # \____/ .__/\__/_//_/___/\__/\_,_/\__/_/\_\\___/_/\_,_/
 #     /_/
 # Make your OpenStacks Collaborative
+import logging
+
+
+__version__ = '0.0.1'
+
+version = __version__
+
+
+# Add a Null logging handler to prevent logging output when un-configured
+logging.getLogger('openstackoid').addHandler(logging.NullHandler())

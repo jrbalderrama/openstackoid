@@ -9,7 +9,9 @@
 import os
 
 from typing import Dict
+from urllib import parse
 
+import six
 
 DEFAULT_CLOUD_NAME = "CloudOne"
 
@@ -33,3 +35,27 @@ def get_default_scope(cloud_name: str=DEFAULT_CLOUD_NAME) -> Dict[str, str]:
         "network": _get_os_scope_service_env("network", cloud_name),
         "placement": _get_os_scope_service_env("placement", cloud_name)
     }
+
+
+# adapted using: 'from keystoneauth1.session import _sanitize_headers'
+# defining this function here we also avoid import of keystoneauth1
+def sanitize_headers(headers: Dict) -> Dict[str, str]:
+    str_dict = {}
+    for k, v in headers.items():
+        if six.PY3:
+            k = k.decode('ASCII') if isinstance(k, six.binary_type) else k
+            if v is not None:
+                v = v.decode('ASCII') if isinstance(v, six.binary_type) else v
+
+                # decode url strings with special characters
+                v = parse.unquote(v)
+
+        else:
+            k = k.encode('ASCII') if isinstance(k, six.text_type) else k
+            if v is not None:
+                v = v.encode('ASCII') if isinstance(v, six.text_type) else v
+                v = parse.unquote(v)
+
+        str_dict[k] = v
+
+    return str_dict

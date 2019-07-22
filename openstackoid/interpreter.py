@@ -16,8 +16,7 @@ from typing import (Callable, Dict, List, NewType, Union)
 from requests import Request
 from urllib import parse
 
-from .utils import scope, session
-
+from .utils import get_default_scope, sanitize_headers
 
 # A service contains `Interface`, `Region`, `Service Type`, and `URL` keys.
 Scope = NewType('Scope', Dict[str, str])
@@ -102,8 +101,8 @@ class OidInterpreter:
         cloud otherwise.
 
         """
-        final_scope = scope.get_default_scope()
-        headers = session.sanitize_headers(req.headers)
+        final_scope = get_default_scope()
+        headers = sanitize_headers(req.headers)
         if "X-Scope" in headers:
             scope_value = headers.get("X-Scope")
             current_scope = json.loads(scope_value)
@@ -133,7 +132,7 @@ class OidInterpreter:
         token (e.g., X-Auth-Token, X-Subject-Token).
 
         """
-        headers = session.sanitize_headers(req.headers)
+        headers = sanitize_headers(req.headers)
         if token_header_name in headers:
             auth_token = headers.get(token_header_name)
             if SCOPE_DELIM in auth_token:

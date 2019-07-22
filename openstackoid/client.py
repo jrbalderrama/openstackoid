@@ -28,7 +28,7 @@ import logging
 from requests import Session
 from osc_lib import shell
 
-from oidinterpreter.utils import scope
+from .utils import get_default_scope, DEFAULT_CLOUD_NAME
 
 
 logging.basicConfig(level=logging.INFO)
@@ -58,14 +58,14 @@ def build_option_parser(parser):
     """
     def _fmt_doc(service_name):
         return (
-            f"{scope.DEFAULT_CLOUD_NAME} "
+            f"{DEFAULT_CLOUD_NAME} "
             f"(Env: OS_SCOPE_{service_name.upper()} | OS_REGION_NAME)")
 
 
     parser.add_argument(
         '--os-scope',
         metavar='<os_scope>',
-        default=scope.get_default_scope(),
+        default=get_default_scope(),
         help=("OpenStackoid Scope, "
               "default='%s'"
               % json.dumps({
@@ -97,7 +97,7 @@ def _os_shell_monkey_patch(cls, argv):
     """
     global OS_SCOPE
 
-    os_scope = scope.get_default_scope()
+    os_scope = get_default_scope()
     shell_scope = cls.options.os_scope
     error_msg = ('--os-scope is not valid. see, '
                  '`openstack --help|fgrep -A 8 -- --os-scope`')
