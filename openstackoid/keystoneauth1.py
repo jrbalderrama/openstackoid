@@ -17,7 +17,7 @@ from .interpreter import get_oidinterpreter
 
 logger = logging.getLogger(__name__)
 
-SERVICES_CATALOG_PATH = "file:///vagrant/oidinterpreter/services.json"
+SERVICES_CATALOG_PATH = "file:///etc/openstackoid/catalog.json"
 
 
 # Monkey patch `Session.send` to add interpreter mechanism of openstackoid
