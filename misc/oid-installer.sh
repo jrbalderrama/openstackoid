@@ -1,15 +1,11 @@
 #!/bin/bash
 
-OID_DIR=/vagrant
-OIDINTERPRETER_DIR=${OID_DIR}/oidinterpreter
-OSCLI_PLUGIN_DIR=${OID_DIR}/python-openstackoidclient
-OPENDEV_DIR=/opt/opendev
-KEYSTONEAUTH_DIR=${OPENDEV_DIR}/keystoneauth
-KEYSTONEMIDDLEWARE_DIR=${OPENDEV_DIR}/keystonemiddleware
+GIT_TMP=/tmp
+GIT_BASE=https://github.com/jrbalderrama
+BRANCH=oid/stein
 
-sudo pip install -U -e ${OIDINTERPRETER_DIR}
-sudo pip install -U -e ${OSCLI_PLUGIN_DIR}
-sudo pip install -U -e ${KEYSTONEMIDDLEWARE_DIR}
-sudo pip install -U -e ${KEYSTONEAUTH_DIR}
-
+sudo pip install git+${GIT_BASE}/keystonemiddleware@${BRANCH}
+sudo pip install git+${GIT_BASE}/keystoneauth@${BRANCH}
+git clone --branch ${BRANCH} ${GIT_BASE}/openstackoid.git ${GIT_TMP}/openstackoid
+sudo pip install --upgrade --editable ${GIT_TMP}/openstackoid
 sudo systemctl restart devstack@*
