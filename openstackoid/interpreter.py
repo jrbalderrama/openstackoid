@@ -228,8 +228,7 @@ def get_oidinterpreter(services_uri: str) -> OidInterpreter:
 
 def get_oidinterpreter_from_services(
        services: List[Service]) -> OidInterpreter:
-    """Factory method that instantiates a new OidInterpreter from a list of
-service.
+    """OidInterpreter factory from a list of services.
 
     """
     return OidInterpreter(services)
