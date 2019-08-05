@@ -21,7 +21,7 @@ from .utils import get_default_scope, sanitize_headers
 # A service contains `Interface`, `Region`, `Service Type`, and `URL` keys.
 Scope = NewType('Scope', Dict[str, str])
 
-# logging.basicConfig()
+# logging.basicConfig()
 LOG = logging.getLogger(__name__)
 
 SCOPE_DELIM = "!SCOPE!"
@@ -58,7 +58,7 @@ class OidInterpreter:
     """Interprets the `Scope` in a `Request` and update it."""
 
     def __init__(self, services: List[Service]):
-        """Private: Use `get_oidinterpreter instead`."""
+        """Private: Use `get_interpreter instead`."""
         self.services = services
         LOG.info(f'New OidInterpreter instance')
 
@@ -168,31 +168,36 @@ class OidInterpreter:
                 s.cloud == targeted_cloud)
 
         # Update request
-        req.url = req.url.replace(
-            service.url, targeted_service.url) # Change url
-        self.clean_token_header(req, 'X-Subject-Token')  # Remove scope
-        if targeted_service_type == 'identity':          # from token
+        # 1. Change url
+        req.url = req.url.replace(service.url, targeted_service.url)
+        # 2. Remove scope from token
+        self.clean_token_header(req, 'X-Subject-Token')
+        if targeted_service_type == 'identity':
             self.clean_token_header(req, 'X-Auth-Token')
-        req.headers.update({
-            'X-Scope': json.dumps(scope),
-        })
+
+        # 3. Update contents
+        req.headers.update({'X-Scope': json.dumps(scope)})
 
         # HACK: Find the identity service. This part is used later to add
-        # helpful headers to tweak the keystone middleware
-        try:
-            id_service = self.lookup_service(
-                lambda s:
-                    s.interface == 'admin' and
-                    s.service_type == 'identity' and
-                    s.cloud == scope['identity'])
+        # helpful headers to tweak the keystone middleware.
+        #
+        # The system env var OS_REGION_NAME must be defined to get the
+        # proper default scope, otherwise 'CloudOne' is set from oid.utils
+        if targeted_service_type == 'identity':
+            try:
+                id_service = self.lookup_service(
+                    lambda s:
+                        s.interface == 'admin' and
+                        s.service_type == 'identity' and
+                        s.cloud == scope['identity'])
 
-            req.headers.update({
-                'X-Identity-Cloud': id_service.cloud,
-                'X-Identity-Url': id_service.url,
-            })
-        except StopIteration:
-            LOG.error(f"Invalid identity scope: {scope['identity']}")
-            raise ValueError
+                req.headers.update({
+                    'X-Identity-Cloud': id_service.cloud,
+                    'X-Identity-Url': id_service.url,
+                })
+            except StopIteration:
+                LOG.error(f"Invalid identity scope: {scope['identity']}")
+                raise ValueError
 
     def iinterpret(self, req: Request) -> Request:
         "Immutable version of `interpret`."
@@ -201,7 +206,7 @@ class OidInterpreter:
         return req2
 
 
-def get_oidinterpreter(services_uri: str) -> OidInterpreter:
+def get_interpreter(services_uri: str) -> OidInterpreter:
     """Factory method that instantiates a new OidInterpreter.
 
     services_uri is the url of the services list. In absence of scheme, the
@@ -226,7 +231,7 @@ def get_oidinterpreter(services_uri: str) -> OidInterpreter:
     return SCOPE_INTERPRETERS.setdefault(uri, OidInterpreter(services))
 
 
-def get_oidinterpreter_from_services(
+def get_interpreter_from_services(
        services: List[Service]) -> OidInterpreter:
     """OidInterpreter factory from a list of services.
 
