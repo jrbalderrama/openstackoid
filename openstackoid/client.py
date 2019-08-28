@@ -31,9 +31,9 @@ from osc_lib import shell
 from .utils import get_default_scope, DEFAULT_CLOUD_NAME
 
 
-logging.basicConfig(level=logging.INFO)
-
+# logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 DEFAULT_API_VERSION = '1'
 
