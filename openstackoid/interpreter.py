@@ -21,7 +21,7 @@ from .utils import get_default_scope, sanitize_headers
 # A service contains `Interface`, `Region`, `Service Type`, and `URL` keys.
 Scope = NewType('Scope', Dict[str, str])
 
-# logging.basicConfig()
+#logging.basicConfig(format='\t\t%(levelname)s - %(message)s', level=logging.DEBUG)
 LOG = logging.getLogger(__name__)
 
 SCOPE_DELIM = "!SCOPE!"
@@ -60,7 +60,7 @@ class OidInterpreter:
     def __init__(self, services: List[Service]):
         """Private: Use `get_interpreter instead`."""
         self.services = services
-        LOG.info(f'New OidInterpreter instance')
+        LOG.debug(f'New OidInterpreter instance')
 
     def lookup_service(self, p: Callable[[Service], bool]) -> Service:
         """Finds the first Service that satisfies `p`.
@@ -72,7 +72,7 @@ class OidInterpreter:
         """
         try:
             service = next(s for s in self.services if p(s))
-            LOG.info(f'Lookup finds service {service} with predicate {p}')
+            LOG.info(f'Lookup found: {service} with predicate {p}')
             return service
         except StopIteration as s:
             LOG.info(f'No service found with predicate {p}')
@@ -90,6 +90,7 @@ class OidInterpreter:
             service = self.lookup_service(
                 lambda s: req.url.startswith(s.url))
         finally:
+            LOG.info(f'Scoped URL service: {service}')
             return service
 
     def get_scope(self, req: Request) -> Scope:
@@ -120,7 +121,7 @@ class OidInterpreter:
             auth_scope = f"{token}{SCOPE_DELIM}{json.dumps(final_scope)}"
             req.headers.update({ "X-Auth-Token": auth_scope })
 
-        LOG.info(f"Scope got from headers: {final_scope}")
+        LOG.info(f"Scope from headers: {final_scope}")
         return final_scope
 
     def clean_token_header(self, req: Request, token_header_name: str) -> None:
@@ -140,7 +141,7 @@ class OidInterpreter:
                 req.headers.update({ token_header_name: token })
                 LOG.info(f'Revert {token_header_name} to {token}')
 
-    def interpret(self, req: Request) -> None:
+    def interpret(self, req: Request, atomic_scope:str = None) -> None:
         """Finds & interprets the scope to update `req` if need be.
 
         Update `req` in place with the new headers and url.
@@ -158,7 +159,8 @@ class OidInterpreter:
         # Find the targeted cloud
         targeted_service_type = service.service_type
         targeted_interface = service.interface
-        targeted_cloud = scope[targeted_service_type]
+        targeted_cloud = atomic_scope if atomic_scope else scope[targeted_service_type]
+        LOG.info(f"Effective endpoint: {targeted_cloud}")
 
         # From targeted cloud, find the targeted service
         targeted_service = self.lookup_service(
@@ -199,10 +201,10 @@ class OidInterpreter:
                 LOG.error(f"Invalid identity scope: {scope['identity']}")
                 raise ValueError
 
-    def iinterpret(self, req: Request) -> Request:
+    def iinterpret(self, req: Request, atomic_scope:str = None) -> Request:
         "Immutable version of `interpret`."
         req2 = copy.deepcopy(req)
-        self.interpret(req2)
+        self.interpret(req2, atomic_scope)
         return req2
 
 
