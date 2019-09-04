@@ -13,6 +13,7 @@ from requests import Session
 from typing import Dict
 
 from .interpreter import get_interpreter
+from .dispatcher import dispatch
 
 
 logger = logging.getLogger(__name__)
@@ -25,11 +26,9 @@ session_send = Session.send
 
 
 def _session_send_monkey_patch(cls, request, **kwargs):
-    logger.warning("Patching session send with OidInterpreter")
+    logger.warning("Patching session send with OidDispatcher")
     interpreter = get_interpreter(SERVICES_CATALOG_PATH)
-    _request = interpreter.iinterpret(request)
-    logger.debug(f"FINAL request headers: {_request.headers}")
-    return session_send(cls, _request, **kwargs)
+    return dispatch(interpreter, session_send, cls, request, **kwargs)
 
 
 # magic happens here!

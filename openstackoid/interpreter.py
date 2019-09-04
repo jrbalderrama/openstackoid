@@ -110,7 +110,7 @@ class OidInterpreter:
             final_scope = dict(final_scope, **current_scope)
             req.headers.update({ "X-Scope": json.dumps(final_scope) })
             LOG.debug("Scope set from X-Scope")
-        elif "X-Auth-Token" in headers:
+        if "X-Auth-Token" in headers:
             token = headers.get("X-Auth-Token")
             if SCOPE_DELIM in token:
                 token, scope_value = token.split(SCOPE_DELIM)
@@ -172,7 +172,7 @@ class OidInterpreter:
         # Update request
         # 1. Change url
         req.url = req.url.replace(service.url, targeted_service.url)
-        # 2. Remove scope from token
+        # 2. Remove scope from token
         self.clean_token_header(req, 'X-Subject-Token')
         if targeted_service_type == 'identity':
             self.clean_token_header(req, 'X-Auth-Token')

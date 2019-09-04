@@ -7,10 +7,10 @@
 # Make your OpenStacks Collaborative
 
 import ast
-# import functools
 import logging
 
 from requests import Session, Request, Response
+from typing import Callable
 
 
 FILTERED = (ast.Load, ast.And, ast.Or, ast.BitOr, ast.BitAnd, ast.BitXor)
@@ -63,12 +63,17 @@ def visit(node, offset=0, dump=False):
 
 class ScopeTransformer(ast.NodeTransformer):
 
-    def __init__(self, request: Request, interpreter):
-        self.request = request
+    def __init__(self, interpreter, session_send: Callable,
+                 session: Session, request: Request, **keywords):
         self.interpreter = interpreter
+        self.session_send = session_send
+        self.session = session
+        self.request = request
+        self.keywords = keywords
 
     def visit_Name(self, node):
-        return OidDispatcher(node.id, self.request, self.interpreter)
+        return OidDispatcher(node.id, self.interpreter, self.session_send,
+                             self.session, self.request, **self.keywords)
 
     def visit_BinOp(self, node):
         # super call is required for implicit recursivity
@@ -77,43 +82,44 @@ class ScopeTransformer(ast.NodeTransformer):
         return getattr(node.left, operator)(node.right)
 
 
-#@functools.lru_cache(maxsize=5)
-def cache_request(endpoint: str, request: Request, interpreter, **kwargs) -> Response:
-    logger.warn(f"Caching request of endpoint: '{endpoint}'")
-    session = Session()
-
+def session_request(endpoint: str, interpreter, session_send: Callable,
+                    session: Session, request: Request, **keywords) -> Response:
     # must be immutable because request disappears after processed
     target_request = interpreter.iinterpret(request, atomic_scope=endpoint)
-    prepared_request = target_request.prepare()
-    response = session.send(prepared_request, **kwargs)
-    logger.debug(f"\t[{response.status_code}] {response.url}")
+    response = session_send(session, target_request, **keywords)
+    logger.warning(f"\t[{response.status_code}] {response.url}")
     return response
 
 
 class OidDispatcher:
 
-    def __init__(self, endpoint: str, request: Request, interpreter, **kwargs):
-        logger.debug(f"Identified endpoint: '{endpoint}'")
+    def __init__(self, endpoint: str, interpreter, session_send: Callable,
+                 session: Session, request: Request, **keywords):
+        logger.warning(f"\tFinal endpoint for session request: '{endpoint}'")
         self.endpoint = endpoint
-        self.request = request
         self.interpreter = interpreter
+        self.session_send = session_send
+        self.session = session
+        self.request = request
+        self.keywords = keywords
         self._response = None
-        self.keywords = kwargs
 
     @property
     def response(self) -> Response:
         if not self._response:
-            self._response = cache_request(self.endpoint,
-                                           self.request,
-                                           self.interpreter,
-                                           **self.keywords)
+            self._response = session_request(self.endpoint,
+                                             self.interpreter,
+                                             self.session_send,
+                                             self.session,
+                                             self.request,
+                                             **self.keywords)
 
         return self._response
 
     def __bool__(self):
         # Here a lazy init with 'self.response' instead of 'self._response'
         return True \
-            if self.response and self.response.status_code == 200 \
+            if self.response and self.response.status_code in [200, 201] \
                else False
 
     def __or__(self, other):
@@ -123,21 +129,25 @@ class OidDispatcher:
             return other
 
     def __and__(self, other):
-        if self and other:
-            return other
+        if self:
+            if other:
+                return other
 
     def __str__(self):
         return self.endpoint
 
 
-def dispatch(request: Request, interpreter) -> Response:
+def dispatch(interpreter, session_send: Callable,
+             session: Session, request: Request, **keywords) -> Response:
     global_scope = interpreter.get_scope(request)
     target_service = interpreter.is_scoped_url(request)
     narrow_scope = global_scope[target_service.service_type]
-    logger.info(f"Target scope: '{narrow_scope}'")
+    logger.warning(f"\tNarrow scope: '{narrow_scope}'")
     tree = ast.parse(narrow_scope, mode ='eval')
     # logger.debug(f"Root Tree = {dump(tree)}")
     visit(tree.body)
-    dispatcher = ScopeTransformer(request, interpreter).visit(tree.body)
-    # logger.debug(f"  ≡ {dispatcher}")
+    dispatcher = ScopeTransformer(
+        interpreter, session_send,
+        session, request, **keywords).visit(tree.body)
+    #logger.debug(f"  ≡ {dispatcher}")
     return dispatcher.response

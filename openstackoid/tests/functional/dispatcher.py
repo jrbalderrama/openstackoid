@@ -6,7 +6,7 @@
 #     /_/
 # Make your OpenStacks Collaborative
 
-from requests import Request
+from requests import Request, Session
 
 import json
 import logging
@@ -40,7 +40,7 @@ duckduckgo = Service(service_type='Search Engine',
 
 #narrow_scope = "Instance2 & ((Instance1 & Instance2) | (Instance2 & Instance1)) | Instance0"
 #narrow_scope = "Instance2 & (Instance0 | Instance1)"
-narrow_scope = "Instance0 | Instance2"
+narrow_scope = "Instance2 | Instance1"
 #narrow_scope = "Instance1"
 
 scope = {'Search Engine': narrow_scope, 'identity': 'Instance1'}
@@ -48,4 +48,5 @@ headers = {'X-Scope': json.dumps(scope)}
 request = Request('GET', f'{duckduckgo.url}?q=discovery', headers)
 services = [identity, invalid, qwant, duckduckgo]
 interpreter = oid.get_interpreter_from_services(services)
-response = dispatcher.dispatch(request, interpreter)
+session = Session()
+response = dispatcher.dispatch(interpreter, Session.send, session, request)
