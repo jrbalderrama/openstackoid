@@ -28,11 +28,12 @@ import logging
 from requests import Session
 from osc_lib import shell
 
-from .utils import get_default_scope, DEFAULT_CLOUD_NAME
+from .utils import DEFAULT_CLOUD_NAME, get_default_scope, sanitize_headers
 
 
 # logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 DEFAULT_API_VERSION = '1'
@@ -148,8 +149,9 @@ session_request = Session.request
 def _session_request_monkey_patch(cls, method, url, **kwargs):
     """Piggyback the `OS_SCOPE` on `X-Auth-Token`."""
 
-    logger.warning("Patching session request")
-    headers = kwargs.get("headers", {})
+    logger.warning("Patching session request of OpenStack client")
+    headers = kwargs.pop("headers")
+    headers = sanitize_headers(headers) if headers else {}
 
     # Put the scope in X-Scope header (there is always a scope)
     logger.info(f"Set the X-Scope header with {OS_SCOPE}...")
@@ -163,7 +165,8 @@ def _session_request_monkey_patch(cls, method, url, **kwargs):
         headers['X-Auth-Token'] = f"{token}!SCOPE!{scope_value}"
         logger.debug(f"Piggyback os-scope {repr(headers)}")
 
-    return session_request(cls, method, url, **kwargs)
+    # update kwargs for proper request dispatch
+    return session_request(cls, method, url, headers=headers, **kwargs)
 
 
 Session.request = _session_request_monkey_patch
