@@ -24,23 +24,24 @@ logger.setLevel(logging.DEBUG)
 
 # A dummy identity service is required for proper interpretation of scope
 identity = Service(service_type='identity',
-                   cloud='Instance1',
+                   cloud='Instance0',
                    url='https://www.phony.com/',
                    interface='admin')
 # dukduckgo instead of duckduckgo (without first 'c') for a 403 response
 invalid = Service(service_type='Search Engine',
-               cloud='Instance0',
+               cloud='Instance1',
                url='https://www.dukduckgo.com/')
 qwant = Service(service_type='Search Engine',
-                cloud='Instance1',
+                cloud='Instance2',
                 url='https://www.qwant.com/')
 duckduckgo = Service(service_type='Search Engine',
-              cloud='Instance2',
-              url='https://www.duckduckgo.com/')
+                     cloud='Instance3',
+                     url='https://www.duckduckgo.com/')
 
 #narrow_scope = "Instance2 & ((Instance1 & Instance2) | (Instance2 & Instance1)) | Instance0"
-#narrow_scope = "Instance2 & (Instance0 | Instance1)"
-narrow_scope = "Instance2 | Instance1"
+#narrow_scope = "Instance2 & Instance1 & Instance2 | Instance2 & Instance1 | Instance0"
+narrow_scope = "Instance2 & (Instance3 | Instance1)"
+#narrow_scope = "Instance1 | Instance2"
 #narrow_scope = "Instance1"
 
 scope = {'Search Engine': narrow_scope, 'identity': 'Instance1'}
@@ -49,4 +50,5 @@ request = Request('GET', f'{duckduckgo.url}?q=discovery', headers)
 services = [identity, invalid, qwant, duckduckgo]
 interpreter = oid.get_interpreter_from_services(services)
 session = Session()
-response = dispatcher.dispatch(interpreter, Session.send, session, request)
+prepared_request = session.prepare_request(request)
+response = dispatcher.dispatch(interpreter, Session.send, session, prepared_request)
