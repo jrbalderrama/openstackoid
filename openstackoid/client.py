@@ -165,7 +165,7 @@ def _session_request_monkey_patch(cls, method, url, **kwargs):
         headers['X-Auth-Token'] = f"{token}!SCOPE!{scope_value}"
         logger.debug(f"Piggyback os-scope {repr(headers)}")
 
-    # update kwargs for proper request dispatch
+    # update kwargs with popped headers for proper request dispatch
     return session_request(cls, method, url, headers=headers, **kwargs)
 
 

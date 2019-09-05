@@ -26,7 +26,7 @@ LOG = logging.getLogger(__name__)
 
 SCOPE_DELIM = "!SCOPE!"
 
-SCOPE_INTERPRETERS = {}
+SCOPE_INTERPRETERS: Dict = {}
 
 
 @dataclass
@@ -217,7 +217,7 @@ def get_interpreter(services_uri: str) -> OidInterpreter:
     Right now, we only support filepath uri.
 
     """
-    services = []
+    services: List[Service] = []
     uri = parse.urlparse(services_uri)
 
     if uri not in SCOPE_INTERPRETERS:

@@ -10,7 +10,7 @@ import ast
 import logging
 
 from requests import Session, Request, Response
-from typing import Callable
+from typing import Callable, Optional
 
 
 FILTERED = (ast.Load, ast.And, ast.Or, ast.BitOr, ast.BitAnd, ast.BitXor)
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def to_str(node):
+def to_str(node: ast.AST) -> Optional[str]:
     name = None
     if not isinstance(node, FILTERED):
         if isinstance(node, ast.BoolOp):
@@ -27,32 +27,34 @@ def to_str(node):
             values = ", ".join(to_str(x) for x in node.values)
             name = f"{operator}({values})"
         elif isinstance(node, ast.BinOp):
-            operator = node.op.__class__.__name__.lower()
+            operator = node.op.__class__.__name__.lower()[3:]
             left = to_str(node.left)
             right = to_str(node.right)
-            name = f"{left} {operator} {right}"
+            name = f"({left} {operator} {right})"
         elif isinstance(node, ast.Name):
-            name = node.id.lower()
+            name = node.id
         else:
             raise TypeError
 
-        return name
+    return name
 
 
-def dump(node):
+def dump(node) -> str:
     return ast.dump(node,
                     annotate_fields=True,
                     include_attributes=False)
 
 
-def visit(node, offset=0, dump=False):
+def visit(node: ast.Expression, offset=0, verbose=False) -> None:
     if isinstance(node, ast.AST):
         name = to_str(node)
         if name:
-            if dump:
-                logger.info("_ " * offset + name + " - " + dump(node))
-            else:
-                logger.info("_ " * offset + name)
+            if name.startswith("(") and name.endswith(')'):
+                name = name[1:-1]
+            level = "" if offset == 0 else f"{offset} "
+            details = " - " + dump(node) if verbose else ""
+            logger.debug(f"{level}" + "_ " * offset + f"{name}{details}")
+
         for field, value in ast.iter_fields(node):
             if isinstance(value, list):
                 for item in value:
@@ -63,7 +65,7 @@ def visit(node, offset=0, dump=False):
 
 class ScopeTransformer(ast.NodeTransformer):
 
-    def __init__(self, interpreter, session_send: Callable,
+    def __init__(self, interpreter, session_send: Callable[..., Response],
                  session: Session, request: Request, **keywords):
         self.interpreter = interpreter
         self.session_send = session_send
@@ -82,18 +84,19 @@ class ScopeTransformer(ast.NodeTransformer):
         return getattr(node.left, operator)(node.right)
 
 
-def session_request(endpoint: str, interpreter, session_send: Callable,
+def session_request(endpoint: str, interpreter, session_send: Callable[..., Response],
                     session: Session, request: Request, **keywords) -> Response:
     # must be immutable because request disappears after processed
     target_request = interpreter.iinterpret(request, atomic_scope=endpoint)
     response = session_send(session, target_request, **keywords)
-    logger.warning(f"\t[{response.status_code}] {response.url}")
+    logger.debug(f"\t[{response.status_code}] {response.url}")
     return response
 
 
 class OidDispatcher:
 
-    def __init__(self, endpoint: str, interpreter, session_send: Callable,
+    def __init__(self, endpoint: str, interpreter, session_send: Callable[..., Response],
+                 # response_merger: Callable[..., Response]=lambda x:x,
                  session: Session, request: Request, **keywords):
         logger.warning(f"\tFinal endpoint for session request: '{endpoint}'")
         self.endpoint = endpoint
@@ -102,7 +105,7 @@ class OidDispatcher:
         self.session = session
         self.request = request
         self.keywords = keywords
-        self._response = None
+        self._response: Optional[Response] = None
 
     @property
     def response(self) -> Response:
@@ -116,7 +119,7 @@ class OidDispatcher:
 
         return self._response
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         # Here a lazy init with 'self.response' instead of 'self._response'
         return True \
             if self.response and self.response.status_code in [200, 201] \
@@ -129,25 +132,26 @@ class OidDispatcher:
             return other
 
     def __and__(self, other):
-        if self:
-            if other:
-                return other
+        if self and other:
+            # TODO Merge responses before return final response
+            # return response_merger(self.response, other.response)
+            return other
 
     def __str__(self):
         return self.endpoint
 
 
-def dispatch(interpreter, session_send: Callable,
+def dispatch(interpreter, session_send: Callable[..., Response],
              session: Session, request: Request, **keywords) -> Response:
     global_scope = interpreter.get_scope(request)
     target_service = interpreter.is_scoped_url(request)
     narrow_scope = global_scope[target_service.service_type]
-    logger.warning(f"\tNarrow scope: '{narrow_scope}'")
+    logger.info(f"\tScope: '{narrow_scope}'")
     tree = ast.parse(narrow_scope, mode ='eval')
-    # logger.debug(f"Root Tree = {dump(tree)}")
+    # logger.debug(f"\t= {dump(tree)}")
     visit(tree.body)
     dispatcher = ScopeTransformer(
         interpreter, session_send,
         session, request, **keywords).visit(tree.body)
-    #logger.debug(f"  ≡ {dispatcher}")
+    logger.info(f"\t= {dispatcher}")
     return dispatcher.response

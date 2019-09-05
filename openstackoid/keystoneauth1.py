@@ -9,7 +9,7 @@
 import json
 import logging
 
-from requests import Session
+from requests import Session, Request, Response
 from typing import Dict
 
 from .interpreter import get_interpreter
