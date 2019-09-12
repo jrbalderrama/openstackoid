@@ -6,14 +6,14 @@
 #     /_/
 # Make your OpenStacks Collaborative
 
-from requests import Request, Session
+from requests import Request, Response, Session
 
 import json
 import logging
 
 from openstackoid.interpreter import Service
+from openstackoid.dispatcher import OidDispatcher
 
-import openstackoid.dispatcher as dispatcher
 import openstackoid.interpreter as oid
 
 
@@ -38,17 +38,17 @@ duckduckgo = Service(service_type='Search Engine',
                      cloud='Instance3',
                      url='https://www.duckduckgo.com/')
 
-#narrow_scope = "Instance2 & ((Instance1 & Instance2) | (Instance2 & Instance1)) | Instance0"
+narrow_scope = "Instance1 & ((Instance3 | Instance2) & (Instance1 | Instance3)) | Instance2"
 #narrow_scope = "Instance2 & Instance1 & Instance2 | Instance2 & Instance1 | Instance0"
-narrow_scope = "Instance2 & (Instance3 | Instance1)"
-#narrow_scope = "Instance1 | Instance2"
+#narrow_scope = "Instance2 & (Instance3 | Instance1)"
+#narrow_scope = "Instance3 | Instance2"
 #narrow_scope = "Instance1"
 
 scope = {'Search Engine': narrow_scope, 'identity': 'Instance1'}
 headers = {'X-Scope': json.dumps(scope)}
-request = Request('GET', f'{duckduckgo.url}?q=discovery', headers)
+request = Request('GET', f'https://www.duckduckgo.com/?q=discovery', headers)
 services = [identity, invalid, qwant, duckduckgo]
 interpreter = oid.get_interpreter_from_services(services)
 session = Session()
 prepared_request = session.prepare_request(request)
-response = dispatcher.dispatch(interpreter, Session.send, session, prepared_request)
+response = OidDispatcher[Response].requests_scope()(interpreter, session, prepared_request)
