@@ -76,16 +76,16 @@ class ScopeTransformer(ast.NodeTransformer, Generic[T]):
 
     def __init__(self,
                  func: Callable[..., T],
-                 bool_eval_func: Callable[..., bool],
+                 bool_evl_func: Callable[..., bool],
+                 args_xfm_func: Callable[..., Tuple[Tuple, Dict]],
                  disj_res_func: Callable[..., T],
                  conj_res_func: Callable[..., T],
-                 args_xform_func: Callable[..., Tuple[Tuple, Dict]],
                  *arguments, **keywords):
         self.func: Callable[..., T] = func
-        self.bool_eval_func: Callable[..., bool] = bool_eval_func
+        self.bool_evl_func: Callable[..., bool] = bool_evl_func
+        self.args_xfm_func: Callable[..., Tuple[Tuple, Dict]] = args_xfm_func
         self.disj_res_func: Callable[..., T] = disj_res_func
         self.conj_res_func: Callable[..., T] = conj_res_func
-        self.args_xform_func = args_xform_func
         self.arguments = arguments
         self.keywords = keywords
 
@@ -93,92 +93,72 @@ class ScopeTransformer(ast.NodeTransformer, Generic[T]):
         logger.info(f"Processing '{node.id}'")
         return OidDispatcher(node.id,
                              self.func,
-                             self.bool_eval_func,
+                             self.bool_evl_func,
+                             self.args_xfm_func,
                              self.disj_res_func,
                              self.conj_res_func,
-                             self.args_xform_func,
                              *self.arguments, **self.keywords)
 
     def visit_BinOp(self, node):
-        # super call is required for implicit recursivity
+        # Call 'super' method is required for implicit recursivity
         super(ScopeTransformer, self).generic_visit(node)
         operator = "__{}__".format(node.op.__class__.__name__[3:].lower())
-        logger.info(f"Evaluating ({node.left} {operator[2:-2]} {node.right})")
-        return getattr(node.left, operator)(node.right)
+        result = None
+        if hasattr(node, 'left') and hasattr(node, 'right'):
+            logger.info(f"Evaluating ({node.left} {operator[2:-2]} {node.right})")
+            result = getattr(node.left, operator)(node.right)
+        elif hasattr(node, 'left'):
+            # there is no 'right' attribute
+            # return 'left' to enable operator pipelining : <?> | (None | None)
+            result = node.left
+        elif hasattr(node, 'right'):
+            # there is no 'left' attribute
+            # return 'right' to enable operator pipelining : None | None | <?>
+            result = node.right
+        else:
+            # this case should never happen
+            logger.warning("Operator evaluation with 'None' value")
+        return result
 
 
-def get_interpreter(*arguments) -> OidInterpreter:
-    return next(a for a in arguments if isinstance(a, OidInterpreter))
-
-
-def get_request(*arguments) -> PreparedRequest:
-    return next(a for a in arguments if isinstance(a, PreparedRequest))
-
-
-def get_narrow_scope(*arguments) -> str:
-    interpreter = get_interpreter(*arguments)
-    request = typing.cast(Request, get_request(*arguments))
-    global_scope = interpreter.get_scope(request)
-    target_service = interpreter.is_scoped_url(request)
-    narrow_scope = global_scope[target_service.service_type]
-    logger.info(f"\tScope: '{narrow_scope}'")
-    return narrow_scope
-
-
-default_conj_func=lambda *x: x[1] if x[0] and x[1] else None
 default_disj_func=lambda *x: x[0] if x[0] else x[1] if x[1] else None
-
-
-def requests_args_xform_func(*arguments, **keywords) -> Tuple[Tuple, Dict]:
-    interpreter = get_interpreter(*arguments)
-    endpoint = next(a for a in arguments if isinstance(a, str))
-    session = next(a for a in arguments if isinstance(a, Session))
-    _request = typing.cast(Request, get_request(*arguments))
-
-    # must be immutable because request disappears after processed
-    request: Request = interpreter.iinterpret(_request, atomic_scope=endpoint)
-
-    return (session, request), keywords
-
-
-def requests_bool_eval_func(instance) -> bool:
-    # Here a lazy init with 'self.response' instead of 'self._response'
-    return True \
-        if instance.result and \
-           typing.cast(Response, instance.result).status_code in [200, 201] \
-           else False
+default_conj_func=lambda *x: x[1] if x[0] and x[1] else None
 
 
 class OidDispatcher(Generic[T]):
 
     def __init__(self, endpoint: str,
                  func: Callable[..., T],
-                 bool_eval_func: Callable[..., bool],
+                 bool_evl_func: Callable[..., bool],
+                 args_xfm_func: Callable[..., Tuple[Tuple, Dict]],
                  disj_res_func: Callable[..., T],
                  conj_res_func: Callable[..., T],
-                 args_xform_func: Callable[..., Tuple[Tuple, Dict]],
                  *arguments, **keywords):
         self.endpoint = endpoint
         self.func: Callable[..., T] = func
-        self.bool_eval_func: Callable[..., bool] = bool_eval_func
+        self.bool_evl_func: Callable[..., bool] = bool_evl_func
+        self.args_xfm_func: Callable[..., Tuple[Tuple, Dict]] = args_xfm_func
         self.disj_res_func: Callable[..., T] = disj_res_func
         self.conj_res_func: Callable[..., T] = conj_res_func
-        self.args_xform_func = args_xform_func
-        self.arguments = (self.endpoint,) + arguments
+        self.arguments = (endpoint,) + arguments
         self.keywords = keywords
         self._result: Optional[T] = None
 
     @property
-    def result(self) -> T:
+    def result(self) -> Optional[T]:
         if not self._result:
-            self._result = OidDispatcher.func_wrapper(
-                self.func, self.args_xform_func,
+            self._result = OidDispatcher[T].func_wrapper(
+                self.func, self.args_xfm_func,
                 *self.arguments, **self.keywords)
 
         return self._result
 
+    @result.setter
+    def result(self, value) -> None:
+        self._result = value
+
     def __bool__(self) -> bool:
-        return self.bool_eval_func(self)
+        return self.bool_evl_func(self)
 
     def __or__(self, other) -> T:
         return self.disj_res_func(self, other)
@@ -191,34 +171,80 @@ class OidDispatcher(Generic[T]):
 
     @staticmethod
     def func_wrapper(func: Callable[..., T],
-                     args_xform_func: Callable[..., Tuple[Tuple, Dict]],
-                     *arguments, **keywords) -> T:
-        args, kwargs = args_xform_func(*arguments, **keywords)
+                     args_xfm_func: Callable[..., Tuple[Tuple, Dict]],
+                     *arguments, **keywords) -> Optional[T]:
+        args, kwargs = args_xfm_func(*arguments, **keywords)
         result: T = func(*args, **kwargs)
-        logger.info(result)
+        logger.debug(result)
         return result
 
     @staticmethod
-    def scope(func: Callable, bool_eval_func: Callable[..., bool],
-               args_xform_func: Callable[..., Tuple[Tuple, Dict]],
-               disj_res_func: Callable[..., T], conj_res_func: Callable[..., T]):
-        @functools.wraps(func)
-        def wrapper(*arguments, **keywords):
-            expression = get_narrow_scope(*arguments)
-            tree = ast.parse(expression, mode ='eval')
-            # logger.debug(f"\t= {dump(tree)}")
-            visit(tree.body)
-            dispatcher: OidDispatcher[T] = ScopeTransformer[T](
-                func, bool_eval_func, disj_res_func,
-                conj_res_func, args_xform_func,
-                *arguments, **keywords).visit(tree.body)
-            logger.info(f"\t= {dispatcher}")
-            return dispatcher.result
-        return wrapper
+    def scope(interpreter: OidInterpreter,
+              extr_scp_func: Callable[..., str]=None,
+              bool_evl_func: Callable[..., bool]=None,
+              args_xfm_func: Callable[..., Tuple[Tuple, Dict]]=None,
+              disj_res_func: Callable[..., T]=None,
+              conj_res_func: Callable[..., T]=None):
+        def decorator(func:Callable):
+            @functools.wraps(func)
+            def wrapper(*arguments, **keywords):
+                scope = extr_scp_func(*arguments + (interpreter,), **keywords)
+                tree = ast.parse(scope, mode ='eval')
+                # logger.debug(f"\t= {dump(tree)}")
+                visit(tree.body)
+                dispatcher: OidDispatcher[T] = ScopeTransformer[T](
+                    func,
+                    bool_evl_func,
+                    args_xfm_func,
+                    disj_res_func,
+                    conj_res_func,
+                    *arguments + (interpreter,), **keywords).visit(tree.body)
+                logger.info(f"\t= {dispatcher}")
+                return dispatcher.result if dispatcher else None
+            return wrapper
+        return decorator
 
-    requests_scope = functools.partialmethod(scope,
-                                             Session.send,
-                                             requests_bool_eval_func,
-                                             requests_args_xform_func,
-                                             default_disj_func,
-                                             default_conj_func)
+
+def _get_interpreter(*arguments) -> OidInterpreter:
+    return next(a for a in arguments if isinstance(a, OidInterpreter))
+
+
+def _get_request(*arguments) -> PreparedRequest:
+    return next(a for a in arguments if isinstance(a, PreparedRequest))
+
+
+def requests_extr_scp_func(*arguments, **keywords) -> str:
+    interpreter = _get_interpreter(*arguments)
+    request = typing.cast(Request, _get_request(*arguments))
+    global_scope = interpreter.get_scope(request)
+    target_service = interpreter.is_scoped_url(request)
+    narrow_scope = global_scope[target_service.service_type]
+    logger.info(f"\tScope: '{narrow_scope}'")
+    return narrow_scope
+
+
+def requests_args_xfm_func(*arguments, **keywords) -> Tuple[Tuple, Dict]:
+    interpreter = _get_interpreter(*arguments)
+    endpoint = next(a for a in arguments if isinstance(a, str))
+    session = next(a for a in arguments if isinstance(a, Session))
+    _request = typing.cast(Request, _get_request(*arguments))
+
+    # must be immutable because request disappears after processed
+    request: Request = interpreter.iinterpret(_request, atomic_scope=endpoint)
+
+    return (session, request), keywords
+
+
+def requests_bool_evl_func(instance) -> bool:
+    return True \
+        if instance.result and \
+           typing.cast(Response, instance._result).status_code in [200, 201] \
+           else False
+
+
+requests_scope = functools.partial(OidDispatcher[Response].scope,
+                                   extr_scp_func=requests_extr_scp_func,
+                                   bool_evl_func=requests_bool_evl_func,
+                                   args_xfm_func=requests_args_xfm_func,
+                                   disj_res_func=default_disj_func,
+                                   conj_res_func=default_conj_func)
