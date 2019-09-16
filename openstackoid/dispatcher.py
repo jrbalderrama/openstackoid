@@ -107,17 +107,12 @@ class ScopeTransformer(ast.NodeTransformer, Generic[T]):
         if hasattr(node, 'left') and hasattr(node, 'right'):
             logger.info(f"Evaluating ({node.left} {operator[2:-2]} {node.right})")
             result = getattr(node.left, operator)(node.right)
-        elif hasattr(node, 'left'):
-            # there is no 'right' attribute
-            # return 'left' to enable operator pipelining : <?> | (None | None)
-            result = node.left
-        elif hasattr(node, 'right'):
-            # there is no 'left' attribute
-            # return 'right' to enable operator pipelining : None | None | <?>
-            result = node.right
         else:
-            # this case should never happen
-            logger.warning("Operator evaluation with 'None' value")
+            child_node = node.left if hasattr(node, 'left') else node.right
+            empty_node = OidDispatcher(
+                None, lambda x: x, lambda x: False, None, None, None, None)
+            result = getattr(child_node, operator)(empty_node)
+
         return result
 
 
@@ -140,13 +135,14 @@ class OidDispatcher(Generic[T]):
         self.args_xfm_func: Callable[..., Tuple[Tuple, Dict]] = args_xfm_func
         self.disj_res_func: Callable[..., T] = disj_res_func
         self.conj_res_func: Callable[..., T] = conj_res_func
-        self.arguments = (endpoint,) + arguments
+        self.arguments = arguments
         self.keywords = keywords
         self._result: Optional[T] = None
 
     @property
     def result(self) -> Optional[T]:
         if not self._result:
+            self.keywords.update(endpoint=self.endpoint)
             self._result = OidDispatcher[T].func_wrapper(
                 self.func, self.args_xfm_func,
                 *self.arguments, **self.keywords)
@@ -167,7 +163,7 @@ class OidDispatcher(Generic[T]):
         return self.conj_res_func(self, other)
 
     def __str__(self) -> str:
-        return self.endpoint
+        return self.endpoint if self.endpoint else 'None'
 
     @staticmethod
     def func_wrapper(func: Callable[..., T],
@@ -225,14 +221,13 @@ def requests_extr_scp_func(*arguments, **keywords) -> str:
 
 def requests_args_xfm_func(*arguments, **keywords) -> Tuple[Tuple, Dict]:
     interpreter = _get_interpreter(*arguments)
-    endpoint = next(a for a in arguments if isinstance(a, str))
+    endpoint = keywords.pop('endpoint')
     session = next(a for a in arguments if isinstance(a, Session))
     _request = typing.cast(Request, _get_request(*arguments))
 
     # must be immutable because request disappears after processed
     request: Request = interpreter.iinterpret(_request, atomic_scope=endpoint)
-
-    return (session, request), keywords
+    return (session, request,), keywords
 
 
 def requests_bool_evl_func(instance) -> bool:

@@ -10,6 +10,7 @@ from requests import Request, Response, Session
 
 import json
 import logging
+import urllib3
 
 from openstackoid.interpreter import Service
 from openstackoid.dispatcher import requests_scope
@@ -20,7 +21,7 @@ import openstackoid.interpreter as oid
 logger = logging.getLogger(__name__)
 logging.basicConfig(format='\t%(levelname)s\t: %(message)s')
 #logger.setLevel(logging.DEBUG)
-
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # A dummy identity service is required for proper interpretation of scope
 identity = Service(service_type='identity',
@@ -49,9 +50,11 @@ Session.send = requests_scope(interpreter)(Session.send)
 # Only Instance2 has [200] response
 #narrow_scope = "Instance1 & ((Instance3 | Instance2) & (Instance1 | Instance3)) | Instance2"
 narrow_scope = "Instance2 & Instance1 & Instance2 | Instance2 & Instance1 | Instance0"
-#narrow_scope = "(Instance3 & Instance1) | Instance2"
-#narrow_scope = "Instance2 & (Instance3 | Instance1)"
-#narrow_scope = "Instance1"
+narrow_scope = "(Instance3 & Instance1) | Instance2"
+narrow_scope = "Instance2 & (Instance3 | Instance1)"
+# narrow_scope = "Instance2 & Instance3 | Instance1"
+# narrow_scope = "Instance3 | Instance2"
+# narrow_scope = "Instance1"
 
 scope = {'Search Engine': narrow_scope, 'identity': 'Instance0'}
 headers = {'X-Scope': json.dumps(scope)}
@@ -67,4 +70,4 @@ prepared_request = session.prepare_request(request)
 ## session_send = requests_scope(interpreter)(Session.send)
 ## response = session_send(session, prepared_request)
 ##
-response = session.send(prepared_request, allow_redirects=False)
+response = session.send(prepared_request, allow_redirects=False, verify=False)
