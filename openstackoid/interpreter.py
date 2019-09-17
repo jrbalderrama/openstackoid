@@ -6,15 +6,17 @@
 #     /_/
 # Make your OpenStacks Collaborative
 
+from dataclasses import dataclass
+from typing import (Callable, Dict, List, Optional, NewType)
+
+from requests import Request
+from urllib import parse
+
 import copy
 import json
 import logging
 import os
-
-from dataclasses import dataclass
-from typing import (Callable, Dict, List, NewType, Union)
-from requests import Request
-from urllib import parse
+import typing
 
 from .utils import get_default_scope, sanitize_headers
 
@@ -78,13 +80,13 @@ class OidInterpreter:
             LOG.info(f'No service found with predicate {p}')
             raise s
 
-    def is_scoped_url(self, req: Request) -> Union[Service, "False"]:
+    def get_service(self, req: Request) -> Optional[Service]:
         """Tests if the `req` targets a Service.
 
-        Returns the Service targeted by `req` if any, or False otherwise.
+        Returns the Service targeted by `req` if any.
 
         """
-        service = False
+        service = None
 
         try:
             service = self.lookup_service(
@@ -105,13 +107,13 @@ class OidInterpreter:
         final_scope = get_default_scope()
         headers = sanitize_headers(req.headers)
         if "X-Scope" in headers:
-            scope_value = headers.get("X-Scope")
+            scope_value = headers["X-Scope"]
             current_scope = json.loads(scope_value)
             final_scope = dict(final_scope, **current_scope)
             req.headers.update({ "X-Scope": json.dumps(final_scope) })
             LOG.debug("Scope set from X-Scope")
         if "X-Auth-Token" in headers:
-            token = headers.get("X-Auth-Token")
+            token = headers["X-Auth-Token"]
             if SCOPE_DELIM in token:
                 token, scope_value = token.split(SCOPE_DELIM)
                 current_scope = json.loads(scope_value)
@@ -135,20 +137,35 @@ class OidInterpreter:
         """
         headers = sanitize_headers(req.headers)
         if token_header_name in headers:
-            auth_token = headers.get(token_header_name)
+            auth_token = headers[token_header_name]
             if SCOPE_DELIM in auth_token:
                 token, _ = auth_token.split(SCOPE_DELIM)
                 req.headers.update({ token_header_name: token })
                 LOG.info(f'Revert {token_header_name} to {token}')
 
-    def interpret(self, req: Request, atomic_scope:str = None) -> None:
+
+    def get_service_scope(self, req: Request) -> Optional[str]:
+        """Get the scope of a targeted service type.
+
+        """
+        result = None
+        scope = self.get_scope(req)
+        service = self.get_service(req)
+        if service:
+            result = scope[service.service_type]
+
+        return result
+
+    def interpret(self, req: Request, endpoint: str=None) -> None:
         """Finds & interprets the scope to update `req` if need be.
 
-        Update `req` in place with the new headers and url.
+        Update `req` in place with the new headers and url. If `endpoint` is set
+        do not resolve cloud name and use the provided endpoint instead.
+
         """
         # Get the scope and the service originally targeted
         scope = self.get_scope(req)
-        service = self.is_scoped_url(req)
+        service = self.get_service(req)
 
         # The current request doesn't target a scoped service,
         # so we don't change the request
@@ -159,7 +176,11 @@ class OidInterpreter:
         # Find the targeted cloud
         targeted_service_type = service.service_type
         targeted_interface = service.interface
-        targeted_cloud = atomic_scope if atomic_scope else scope[targeted_service_type]
+
+        # In simple situations (when the scope does not contain an expression,
+        # e.g., scope with operator) the cloud endpoint is the name of the
+        # identifier set in the scope of the original scoped service
+        targeted_cloud = endpoint if endpoint else scope[targeted_service_type]
         LOG.info(f"Effective endpoint: {targeted_cloud}")
 
         # From targeted cloud, find the targeted service
@@ -201,10 +222,10 @@ class OidInterpreter:
                 LOG.error(f"Invalid identity scope: {scope['identity']}")
                 raise ValueError
 
-    def iinterpret(self, req: Request, atomic_scope:str = None) -> Request:
+    def iinterpret(self, req: Request, endpoint:str = None) -> Request:
         "Immutable version of `interpret`."
         req2 = copy.deepcopy(req)
-        self.interpret(req2, atomic_scope)
+        self.interpret(req2, endpoint=endpoint)
         return req2
 
 
