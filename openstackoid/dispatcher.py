@@ -7,7 +7,7 @@
 # Make your OpenStacks Collaborative
 
 from requests import Session, Request, PreparedRequest, Response
-from typing import Any, Callable, Dict, Generic, Optional, Tuple, TypeVar
+from typing import Any, Callable, Dict, Generic, Optional, Tuple, Type, TypeVar
 
 import ast
 import functools
@@ -170,7 +170,7 @@ class OidDispatcher(Generic[T]):
         return self.conj_res_func(self, other)
 
     def __str__(self) -> str:
-        return f"{self.endpoint}({self.result})" if self.endpoint else 'None'
+        return f"{self.endpoint}" if self.endpoint else 'None'
         #return str(self.result)
 
     def func_wrapper(self, func: Callable[..., T],
@@ -210,32 +210,32 @@ class OidDispatcher(Generic[T]):
         return decorator
 
 
-def _get_request(*arguments) -> PreparedRequest:
-    return next(a for a in arguments if isinstance(a, PreparedRequest))
+def _update_arguments_with(arguments: Tuple, old: Any, new: Any) -> Tuple:
+    idx = arguments.index(old)
+    return arguments[:idx] + (new,) + arguments[idx + 1:]
+
+
+def _get_by_type(arguments: Tuple, category: Type) -> Any:
+    return next(a for a in arguments if isinstance(a, category))
 
 
 def requests_extr_scp_func(interpreter: OidInterpreter,
-                           *arguments, **keywords) -> str:
-    request = typing.cast(Request, _get_request(*arguments))
-
-    # TODO refactor in interpreter following three lines
-    global_scope = interpreter.get_scope(request)
-    target_service = interpreter.is_scoped_url(request)
-    narrow_scope = global_scope[target_service.service_type]
+                           *arguments, **keywords) -> Optional[str]:
+    request = _get_by_type(arguments, PreparedRequest)
+    narrow_scope = interpreter.get_service_scope(request)
     logger.info(f"\tScope: '{narrow_scope}'")
     return narrow_scope
 
 
 def requests_args_xfm_func(interpreter, endpoint,
                            *arguments, **keywords) -> Tuple[Tuple, Dict]:
-    # TODO remove next() to set args in return
-    # TODO remove atomic_scope (?) see TODO from requests_extr_scp_func
-    session = next(a for a in arguments if isinstance(a, Session))
-    _request = typing.cast(Request, _get_request(*arguments))
+    original = _get_by_type(arguments, PreparedRequest)
 
     # must be immutable because request disappears after processed
-    request: Request = interpreter.iinterpret(_request, atomic_scope=endpoint)
-    return (session, request,), keywords
+    interpreted: Request = interpreter.iinterpret(original, endpoint=endpoint)
+
+    args = _update_arguments_with(arguments, original, interpreted)
+    return args, keywords
 
 
 def requests_bool_evl_func(instance) -> bool:

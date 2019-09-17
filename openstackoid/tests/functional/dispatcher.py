@@ -52,10 +52,10 @@ Session.send = requests_scope(interpreter)(Session.send)
 #narrow_scope = "Instance1 & ((Instance3 | Instance2) & (Instance1 | Instance3)) | Instance2"
 narrow_scope = "Instance2 & Instance1 & Instance2 | Instance2 & Instance1 | Instance4"
 narrow_scope = "(Instance3 & Instance1) | Instance2"
-#narrow_scope = "Instance2 & (Instance3 | Instance1)"
-# narrow_scope = "Instance2 & Instance3 | Instance1"
-# narrow_scope = "Instance3 | Instance2"
-# narrow_scope = "Instance1"
+narrow_scope = "Instance2 & (Instance3 | Instance1)"
+narrow_scope = "Instance2 & Instance3 | Instance1"
+narrow_scope = "Instance3 | Instance2"
+narrow_scope = "Instance2"
 
 scope = {'Search Engine': narrow_scope, 'identity': 'Instance0'}
 headers = {'X-Scope': json.dumps(scope)}
@@ -71,12 +71,13 @@ prepared_request = session.prepare_request(request)
 ## session_send = requests_scope(interpreter)(Session.send)
 ## response = session_send(session, prepared_request)
 ##
-response = session.send(prepared_request, allow_redirects=False, verify=False)
+response = session.send(prepared_request, verify=False, allow_redirects=False)
+print(response)
 
 
 # Exemple II basic annotation with a simple function and NO interpretation
 def test_extr_scp_func(*args, **kwargs):
-    return 'R|M'
+    return 'R | M'
 
 
 def test_bool_evl_func(instance):
@@ -133,13 +134,16 @@ def tail_factorial(n, r = 1):
         return r
     return tail_factorial(n - 1, n * r)
 
-n=3
-
-print("Non factorial")
-r = non_factorial(n)
-
-print("Factorial")
-r = factorial(n)
-
-print("Tail factorial")
-r = tail_factorial(n)
+# n=3
+#
+# print("Non factorial")
+# r = non_factorial(n)
+# print(r)
+#
+# print("Factorial")
+# r = factorial(n)
+# print(r)
+#
+# print("Tail factorial")
+# r = tail_factorial(n)
+# print(r)
