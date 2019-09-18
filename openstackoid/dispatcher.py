@@ -22,7 +22,7 @@ SERVICES_CATALOG_PATH = "file:///etc/openstackoid/catalog.json"
 FILTERED = (ast.Load, ast.And, ast.Or, ast.BitOr, ast.BitAnd, ast.BitXor)
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 
 def to_str(node: ast.AST) -> Optional[str]:
@@ -108,21 +108,17 @@ class ScopeTransformer(ast.NodeTransformer, Generic[T]):
         operator = "__{}__".format(node.op.__class__.__name__[3:].lower())
         result = None
         if hasattr(node, 'left') and hasattr(node, 'right'):
-            result = getattr(node.left, operator)(node.right)
-            logger.info(f"Evaluating ({node.left} {operator[2:-2]} {node.right})")
-            logger.info(f"Result: {result}")
+            left = node.left
+            right = node.right
         else:
-            child_node = node.left if hasattr(node, 'left') else node.right
-            empty_node = OidDispatcher(
+            left = node.left if hasattr(node, 'left') else node.right
+            right = OidDispatcher(
                 None, None, lambda x: x, lambda x: False, None, None, None, None)
-            result = getattr(child_node, operator)(empty_node)
-            logger.info(f"Evaluating ({child_node} {operator[2:-2]} {empty_node})")
-            logger.info(f"Result: {result}")
+
+        logger.info(f"Evaluating ({left} {operator[2:-2]} {right})")
+        result = getattr(left, operator)(right)
+        logger.info(f"Result: {result}")
         return result
-
-
-default_disj_func=lambda *x: x[0] if x[0] else x[1] if x[1] else None
-default_conj_func=lambda *x: x[1] if x[0] and x[1] else None
 
 
 class OidDispatcher(Generic[T]):
@@ -210,6 +206,11 @@ class OidDispatcher(Generic[T]):
         return decorator
 
 
+default_bool_evl_func=lambda x: True if x.result else False
+default_disj_res_func=lambda *x: x[0] if x[0] else x[1] if x[1] else None
+default_conj_res_func=lambda *x: x[1] if x[0] and x[1] else None
+
+
 def _update_arguments_with(arguments: Tuple, old: Any, new: Any) -> Tuple:
     idx = arguments.index(old)
     return arguments[:idx] + (new,) + arguments[idx + 1:]
@@ -238,16 +239,9 @@ def requests_args_xfm_func(interpreter, endpoint,
     return args, keywords
 
 
-def requests_bool_evl_func(instance) -> bool:
-    return True \
-        if instance.result and \
-           typing.cast(Response, instance._result).status_code in [200, 201] \
-           else False
-
-
 requests_scope = functools.partial(OidDispatcher[Response].scope,
                                    extr_scp_func=requests_extr_scp_func,
-                                   bool_evl_func=requests_bool_evl_func,
+                                   bool_evl_func=default_bool_evl_func,
                                    args_xfm_func=requests_args_xfm_func,
-                                   disj_res_func=default_disj_func,
-                                   conj_res_func=default_conj_func)
+                                   disj_res_func=default_disj_res_func,
+                                   conj_res_func=default_conj_res_func)
