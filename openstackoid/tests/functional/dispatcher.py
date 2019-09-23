@@ -13,8 +13,9 @@ import functools
 import logging
 import urllib3
 
+from openstackoid.dispatcher import \
+    (OidDispatcher, default_bool_evl_func, requests_scope)
 from openstackoid.interpreter import Service
-from openstackoid.dispatcher import requests_scope, OidDispatcher
 
 import openstackoid.interpreter as oid
 
@@ -81,33 +82,29 @@ def test_extr_scp_func(*args, **kwargs):
     return 'R | M'
 
 
-def test_bool_evl_func(instance):
-    return True
-
-
-def test_args_xfm_func(intrepreter, endpoint,
-                       *args, **kwargs):
+def test_args_xfm_func(intrepreter, endpoint, *args, **kwargs):
     return args, kwargs
 
 
-def test_disj_func(this, other):
+def test_disj_res_func(this, other):
     this.result = this.result + other.result
     return this
 
 
-def test_conj_func(this, other):
+def test_conj_res_func(this, other):
     this.result = this.result * other.result
     return this
+
 
 # Method 1.
 # Decorate directly the method with scope
 @OidDispatcher.scope(
     interpreter,
     extr_scp_func=test_extr_scp_func,
-    bool_evl_func=test_bool_evl_func,
+    bool_evl_func=default_bool_evl_func,
     args_xfm_func=test_args_xfm_func,
-    disj_res_func=test_disj_func,
-    conj_res_func=test_conj_func)
+    disj_res_func=test_disj_res_func,
+    conj_res_func=test_conj_res_func)
 def non_factorial(n):
     f = 1
     while(n):
@@ -115,15 +112,16 @@ def non_factorial(n):
         n = n - 1
     return f
 
+
 # Method 2.
-# Use a partial function to decorate the method with a pre-formatted decorator
+# Use a partial function resulting in a pre-formatted decorator
 scope_tail_factorial = functools.partial(
     OidDispatcher[int].scope,
     extr_scp_func=test_extr_scp_func,
-    bool_evl_func=test_bool_evl_func,
+    bool_evl_func=default_bool_evl_func,
     args_xfm_func=test_args_xfm_func,
-    disj_res_func=test_disj_func,
-    conj_res_func=test_conj_func)
+    disj_res_func=test_disj_res_func,
+    conj_res_func=test_conj_res_func)
 
 @functools.lru_cache(maxsize=2)
 @scope_tail_factorial(interpreter)
@@ -132,11 +130,12 @@ def factorial(n):
 
 
 @functools.lru_cache(maxsize=2)
-def tail_factorial(n, r = 1):
+def tail_factorial(n, r=1):
     return r if n <= 1 else tail_factorial(n - 1, n * r)
 
+
 # Method 3.
-# Reassign the method to decorate with the decorator invocation (throws partial method)
+# Reassign the method with a decorator method invocation (throws partial)
 tail_factorial = scope_tail_factorial(interpreter)(tail_factorial)
 
 n=3

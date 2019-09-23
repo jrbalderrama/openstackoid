@@ -19,5 +19,5 @@ logger = logging.getLogger(__name__)
 SERVICES_CATALOG_PATH = "file:///etc/openstackoid/catalog.json"
 
 interpreter = get_interpreter(SERVICES_CATALOG_PATH)
-logger.warning("Monkey patching `Session.send` with OidDispatcher")
+logger.debug("Monkey patching `Session.send` with OidDispatcher")
 Session.send = requests_scope(interpreter)(Session.send)
