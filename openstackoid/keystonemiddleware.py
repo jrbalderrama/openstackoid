@@ -48,13 +48,13 @@ BaseAuthProtocol middleware to target the good Keystone based on the scope.
 
 """
 
-import copy
-from functools import wraps
 
-from oslo_config import cfg
+import copy
+import functools
+
+from keystoneauth1.adapter import Adapter
 from keystoneauth1.identity import v3
 from keystoneauth1.session import Session
-from keystoneauth1.adapter import Adapter
 from keystonemiddleware.auth_token import _identity
 
 
@@ -98,6 +98,7 @@ def make_admin_auth(cloud_auth_url, log):
     log.debug("Authentication plugin %s" % vars(auth))
     return auth
 
+
 def make_keystone_client(cloud_name, session, os_scope, log):
     log.debug("New keystone client for %s in %s"
               % (session.auth.auth_url, cloud_name))
@@ -107,6 +108,7 @@ def make_keystone_client(cloud_name, session, os_scope, log):
         service_type='identity',
         interface='admin',
         region_name=cloud_name,
+
         # Tells adapter to add the scope
         additional_headers={"X-Scope": os_scope})
 
@@ -118,7 +120,8 @@ def make_keystone_client(cloud_name, session, os_scope, log):
     # Set `include_service_catalog` to true so that the HTTP_X_SERVICE_CATALOG
     # is filled with the catalog. Thus a `RequestContext` object (such as Nova
     # `context`) will use that information to get the list of endpoints.
-    k_client = _identity.IdentityServer(log, adapter, include_service_catalog=True)
+    k_client = _identity.IdentityServer(log, adapter,
+                                        include_service_catalog=True)
     log.debug("Success keystone client on %s" % k_client.www_authenticate_uri)
 
     return k_client
@@ -155,8 +158,9 @@ def get_admin_keystone_client(cloud_auth_url, cloud_name, os_scope, log):
 
     return K_CLIENTS[cloud_auth_url]
 
+
 def target_good_keystone(f):
-    @wraps(f)
+    @functools.wraps(f)
     def wrapper(cls, request):
         """Wrapper of __call__ of a BaseAuthProtocol middleware.
 
@@ -178,7 +182,8 @@ def target_good_keystone(f):
         # configuration file) and `cloud_auth_url` is the keystone URL of
         # the targeted cloud.
         original_auth_url = kls._conf.get('auth_url')
-        cloud_auth_url = request.headers.get('X-Identity-Url', original_auth_url)
+        cloud_auth_url = request.headers.get('X-Identity-Url',
+                                             original_auth_url)
         cloud_name = request.headers.get('X-Identity-Cloud')
         os_scope = request.headers.get('X-Scope')
 
@@ -216,21 +221,21 @@ def target_good_keystone(f):
 #     [2]).
 #
 #     However with OpenStackoïd, the Identity server of the current composition
-#     may be in a different region than Nova. This is the case when Alice start a
-#     VM with the following scope:
+#     may be in a different region than Nova. This is the case when Alice start
+#     a VM with the following scope:
 #
 #       openstack server create ... --os-scope '{"identity": "CloudOne", "nova": "CloudTwo"}'
 #
 #     In this case, Keystone will return a scoped-token with a catalog made of
-#     endpoints in CloudOne. Hence, when Nova try to get the list of endpoints of
-#     its region, it fails with the error message:
+#     endpoints in CloudOne. Hence, when Nova try to get the list of endpoints
+#     of its region, it fails with the error message:
 #
 #       ['internal', 'public'] endpoint for network service in CloudTwo region not found
 #
-#     With OpenStackoïd, the notion of regions doesn't really make sense since we
-#     permit collaboration between multiple regions. This monkey patch removes
-#     the region filtering when a service seeks for an endpoint in the service
-#     catalog.
+#     With OpenStackoïd, the notion of regions doesn't really make sense since
+#     we permit collaboration between multiple regions. This monkey patch
+#     removes the region filtering when a service seeks for an endpoint in the
+#     service catalogue.
 #
 #     Refs:
 #       [1] https://github.com/openstack/keystoneauth/blob/8505f37124bb21f41e346a571057c8133f9ca4d5/keystoneauth1/access/service_catalog.py#L402
@@ -239,4 +244,5 @@ def target_good_keystone(f):
 #     """
 #     kwargs.update(region_name=None)
 #     return endpoint_data_for(cls, *args, **kwargs)
+#
 # sc.ServiceCatalog.endpoint_data_for = mkeypatch_endpoint_data_for

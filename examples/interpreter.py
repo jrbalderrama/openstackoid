@@ -1,5 +1,7 @@
 from requests import Request, Session
+
 from openstackoid.interpreter import Service, get_interpreter_from_services
+
 
 # A dummy identity service is required for proper interpretation of scope
 identity = Service(service_type='identity',

@@ -16,12 +16,8 @@ OID_CORE="openstackoid"
 KST_MIDL="keystonemiddleware"
 KST_AUTH="keystoneauth"
 OST_CLNT="python-openstackclient"
-GLC_CLNT="python-glanceclient"
-KST_CLNT="python-keystoneclient"
-NVA_CLNT="python-novaclient"
-NET_CLNT="python-neutronclient"
 
-SRC_MODULES=(${KST_MIDL} ${KST_AUTH} ${OST_CLNT} ${GLC_CLNT} ${KST_CLNT} ${NVA_CLNT} ${NET_CLNT})
+SRC_MODULES=(${KST_MIDL} ${KST_AUTH} ${OST_CLNT})
 set -x
 
 if [ -z "$1" ]
@@ -32,11 +28,11 @@ then
     do
         ${SUDO_CMD} pip uninstall --yes $module
         # required to update easy-install.pth file in dist-packages
-        ${SUDO_CMD} easy_install ${EASY_INSTALL_OPTS} $module
-        for alt_egg in ${DIST_PACKAGES_PATH}${module//-/_}*egg
-        do
-            [ -d $alt_egg ] && ${SUDO_CMD} rm -rf $alt_egg
-        done
+        ${SUDO_CMD} easy_install ${EASY_INSTALL_OPTS} $module > /dev/null 2>&1
+        # for alt_egg in ${DIST_PACKAGES_PATH}${module//-/_}*egg
+        # do
+        #     [ -d $alt_egg ] && ${SUDO_CMD} rm -rf $alt_egg
+        # done
         # required in ubuntu because the package is not uninstalled
         egg="${DIST_PACKAGES_PATH}${module}.egg-link"
         [ -f $egg ] && ${SUDO_CMD} rm -f $egg
@@ -47,7 +43,7 @@ then
     shopt -u nullglob
 else
     ${SUDO_CMD} pip uninstall --yes ${OID_CORE}
-    ${SUDO_CMD} easy_install ${EASY_INSTALL_OPTS} ${OID_CORE}
+    ${SUDO_CMD} easy_install ${EASY_INSTALL_OPTS} ${OID_CORE} > /dev/null 2>&1
     egg="${DIST_PACKAGES_PATH}${OID_CORE}.egg-link"
     [ -f $egg ] && ${SUDO_CMD} rm -f $egg
     egg_info="${OID_BASE_PATH}${OID_CORE}/${OID_CORE}.egg-info"
@@ -58,4 +54,4 @@ else
     done
 fi
 
-sudo systemctl restart devstack@*
+${SUDO_CMD} systemctl restart devstack@*

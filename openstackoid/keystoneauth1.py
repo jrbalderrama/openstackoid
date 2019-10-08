@@ -6,18 +6,19 @@
 #     /_/
 # Make your OpenStacks Collaborative
 
+
 from requests import Session
 
 import logging
 
+from .configuration import SERVICES_CATALOG_PATH
 from .interpreter import get_interpreter
-from .dispatcher import requests_scope
+from .http.send import send_scope
 
 
 logger = logging.getLogger(__name__)
 
-SERVICES_CATALOG_PATH = "file:///etc/openstackoid/catalog.json"
 
 interpreter = get_interpreter(SERVICES_CATALOG_PATH)
-logger.debug("Monkey patching `Session.send` with OidDispatcher")
-Session.send = requests_scope(interpreter)(Session.send)
+logger.debug("Monkey patching 'Session.send'")
+Session.send = send_scope(interpreter)(Session.send)

@@ -6,28 +6,27 @@
 #     /_/
 # Make your OpenStacks Collaborative
 
-import os
 
-from typing import Dict
-from urllib import parse
+from os import environ
+from typing import Any, Callable, Dict, Tuple, Type
 
-import six
+import functools
+import inspect
 
-DEFAULT_CLOUD_NAME = "CloudOne"
+from .configuration import DEFAULT_CLOUD_NAME
 
 
-def _get_os_scope_service_env(service_name: str,
-                              cloud_name: str) -> str:
+def _get_os_scope_service_env(service_name: str, cloud_name: str) -> str:
     env_name = f"OS_SCOPE_{service_name.upper()}"
-    value = os.environ.get(env_name)
+    value = environ.get(env_name)
     if value is None:
-        value = os.environ.get("OS_REGION_NAME", cloud_name)
+        value = environ.get("OS_REGION_NAME", cloud_name)
 
     return value
 
 
 # adding optional argument to set it in the client
-def get_default_scope(cloud_name: str=DEFAULT_CLOUD_NAME) -> Dict[str, str]:
+def get_default_scope(cloud_name: str = DEFAULT_CLOUD_NAME) -> Dict[str, str]:
     return {
         "compute": _get_os_scope_service_env("compute", cloud_name),
         "identity": _get_os_scope_service_env("identity", cloud_name),
@@ -37,25 +36,76 @@ def get_default_scope(cloud_name: str=DEFAULT_CLOUD_NAME) -> Dict[str, str]:
     }
 
 
-# adapted using: 'from keystoneauth1.session import _sanitize_headers'
-# defining this function here we also avoid import of keystoneauth1
-def sanitize_headers(headers: Dict) -> Dict[str, str]:
-    str_dict = {}
-    for k, v in headers.items():
-        if six.PY3:
-            k = k.decode('ASCII') if isinstance(k, six.binary_type) else k
-            if v is not None:
-                v = v.decode('ASCII') if isinstance(v, six.binary_type) else v
+def update_tuple(old: Any, new: Any, arguments: Tuple) -> Tuple:
+    """Update a value of a tuple with an new value.
 
-                # decode url strings with special characters
-                v = parse.unquote(v)
+    Replace with a new value an element positioned at the same indexed position
+    of an old value. This is an immutable method returning an new object.
 
-        else:
-            k = k.encode('ASCII') if isinstance(k, six.text_type) else k
-            if v is not None:
-                v = v.encode('ASCII') if isinstance(v, six.text_type) else v
-                v = parse.unquote(v)
+    """
 
-        str_dict[k] = v
+    idx = arguments.index(old)
+    return arguments[:idx] + (new,) + arguments[idx + 1:]
 
-    return str_dict
+
+def get_from_tuple(argument_type: Type, arguments: Tuple) -> Any:
+    """Get first element of a given 'type' from a tuple.
+
+    """
+
+    return next(a for a in arguments if isinstance(a, argument_type))
+
+
+def _retrieve_name(variable: Any) -> str:
+    """Retrieve the name of a variable.
+
+    """
+
+    local_variables = inspect.currentframe().f_back.f_back.f_locals.items()
+    return [_name for _name, _value in local_variables if _value is variable]
+
+
+# TODO add hooks for requests (comlementary and specific to this)
+def print_func_signature(func: Callable):
+    """Print the signature of a method including its parameters.
+
+    """
+    @functools.wraps(func)
+    def wrapper(*arguments, **keywords):
+        signature = inspect.getargspec(func)
+        print(signature)
+        # print(f"Executing: {func.__name__}")
+        # if arguments:
+        #     print("... with arguments")
+        #     for argument in arguments:
+        #         argument_name = _retrieve_name(argument)
+        #         if hasattr(argument, "__dict__"):
+        #             for name, value in vars(argument).items():
+        #                 argument_type = type(value).__name__
+        #                 print(f"    aggregated argument '{argument_name}'")
+        #                 print(f"    ... {name}: {value} [{argument_type}]")
+        #         else:
+        #             argument_type = type(argument).__name__
+        #             print(f"    {argument_name}: {argument} [{argument_type}]")
+        #
+        # if keywords:
+        #     print("... with keywords")
+        #     for name, value in keywords.items():
+        #         keyword_type = type(value).__name__
+        #         print(f"    {name}: {value} [{keyword_type}] ")
+
+        return func(*arguments, **keywords)
+    return wrapper
+
+    # # _args = None
+    # # if func.__name__ == "send":
+    # #     request = _get_by_type(args, PreparedRequest)
+    # #     service = self.interpreter.get_service_scope(request)
+    # for argument in arguments:
+    #     if hasattr(argument, "__dict__"):
+    #         print(f"\t\t{argument}({type(argument)}): {vars(argument)}")
+    #     else:
+    #         print(f"\t\t{argument}")
+    #
+    #         print(f"\twith keywords {kwargs}")
+    #         print("- - - - - - - - - - - - - - - - - - - - - - - - ")
