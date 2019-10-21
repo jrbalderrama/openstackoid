@@ -7,7 +7,7 @@
 # Make your OpenStacks Collaborative
 
 
-from requests import Session
+from requests import Response, Session
 
 import json
 import logging
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 session_request = Session.request
 
 
-def _session_request_monkey_patch(cls, method, url, **kwargs):
+def _session_request_monkey_patch(cls, method, url, **kwargs) -> Response:
     """Piggyback the scope on headers of the `Session.request` method.
 
     """

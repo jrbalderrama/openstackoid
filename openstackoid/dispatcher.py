@@ -13,7 +13,7 @@ import ast
 import functools
 import logging
 
-from .configuration import push_execution_scope
+from .configuration import pop_execution_scope, push_execution_scope
 from .interpreter import OidInterpreter
 from .utils import print_func_signature
 
@@ -123,9 +123,11 @@ class OidDispatcher(Generic[T]):
     def run_func(self) -> Optional[T]:
         args, kwargs = self.args_xfm_func(self.interpreter, self.endpoint,
                                           *self.arguments, **self.keywords)
-        push_execution_scope((self.service_type, self.endpoint))
+        execution_scope = (self.service_type, self.endpoint)
+        push_execution_scope(execution_scope)
         func = print_func_signature(self.func)
         result: T = func(*args, **kwargs)
+        pop_execution_scope()
         logger.debug(result)
         return result
 

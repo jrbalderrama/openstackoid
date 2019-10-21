@@ -14,8 +14,7 @@ import logging
 
 from requests import PreparedRequest
 
-from .headers import update_service_scope
-from ..configuration import push_execution_scope
+# from .headers import update_service_scope
 from ..dispatcher import scope
 from ..interpreter import OidInterpreter
 from ..utils import get_from_tuple, update_tuple

@@ -7,13 +7,16 @@
 # Make your OpenStacks Collaborative
 
 
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 import copy
 import threading
 
 
 DEFAULT_CLOUD_NAME = "CloudOne"
+
+
+EXECUTION_SCOPE = "atomic_scope"
 
 
 # FIXME spell better and remove scheme
@@ -32,8 +35,9 @@ def _push_to_context(name: str, value: Any) -> None:
 
 
 def get_shell_scope() -> Optional[dict]:
-    # get a copy and preserve original value
-    return copy.copy(_get_from_context("shell_scope"))
+    # Make shell scope immutable
+    shell_scope = _get_from_context("shell_scope")
+    return copy.copy(shell_scope)
 
 
 def push_shell_scope(value: dict) -> None:
@@ -47,15 +51,27 @@ def push_shell_scope(value: dict) -> None:
         _push_to_context("shell_scope", value)
 
 
-def get_execution_scope() -> Optional[Tuple]:
-    return _get_from_context("atomic_scope")
+def get_execution_scope() -> Optional[tuple]:
+    stack = _get_from_context(EXECUTION_SCOPE)
+    return stack[-1] if stack else None
 
 
-def push_execution_scope(value: Tuple) -> None:
+def push_execution_scope(value: tuple) -> None:
     if not isinstance(value, tuple):
         raise TypeError("Atomic scope must be a tuple.")
 
-    if any(operator in value[1] for operator in "|&"):
+    if any(operator in value[1] for operator in "|&^"):
         raise ValueError("Atomic scope must not include operators.")
 
-    _push_to_context("atomic_scope", value)
+    stack = _get_from_context(EXECUTION_SCOPE)
+    if stack:
+        stack.append(value)
+    else:
+        stack = [value]
+
+    _push_to_context(EXECUTION_SCOPE, stack)
+
+
+def pop_execution_scope() -> Optional[tuple]:
+    stack = _get_from_context(EXECUTION_SCOPE)
+    return stack.pop() if stack else None
