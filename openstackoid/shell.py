@@ -100,14 +100,16 @@ def _os_shell_monkey_patch(cls, argv):
     """
 
     final_scope: dict = get_default_scope()
-    shell_value: str = cls.options.oid_scope
-    error_msg = ('--oid-scope is not valid. see, '
-                 '`openstack --help|fgrep -A 8 -- --oid-scope`')
-    try:
-        shell_scope = json.loads(shell_value)
-        final_scope.update(shell_scope)
-    except ValueError:
-        raise ValueError(error_msg)
+    shell_value = cls.options.oid_scope
+    # only update scope if it is provided as 'str' in the shell
+    if isinstance(shell_value, str):
+        try:
+            shell_scope = json.loads(shell_value)
+            final_scope.update(shell_scope)
+        except ValueError:
+            error_msg = ('--oid-scope is not valid. see, '
+                         '`openstack --help|fgrep -A 8 -- --oid-scope`')
+            raise ValueError(error_msg)
 
     push_shell_scope(final_scope)
     logger.info("Save the current oid-scope parameter: ", final_scope)
