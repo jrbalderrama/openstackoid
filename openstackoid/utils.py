@@ -8,7 +8,7 @@
 
 
 from os import environ
-from typing import Any, Callable, Dict, Tuple, Type
+from typing import Any, Callable, Dict, Optional, Tuple, Type
 
 import functools
 import inspect
@@ -20,6 +20,16 @@ def _get_os_scope_service_env(service_name: str, cloud_name: str) -> str:
     env_name = f"OS_SCOPE_{service_name.upper()}"
     value = environ.get(env_name)
     if value is None:
+        value = environ.get("OS_REGION_NAME", cloud_name)
+
+    return value
+
+
+def _get_os_scope_service_env2(service_name: str,
+                               cloud_name: str) -> Optional[str]:
+    env_name = f"OS_SCOPE_{service_name.upper()}"
+    value = environ.get(env_name)
+    if not value:
         value = environ.get("OS_REGION_NAME", cloud_name)
 
     return value

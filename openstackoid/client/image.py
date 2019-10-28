@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 def image_list_extr_scp_func(interpreter: OidInterpreter,
                              *arguments, **keywords) -> Optional[Tuple]:
-    # context type openstackclient.image.v2.image.ListImage
     context = arguments[0]
     shell_scope = context.app.options.oid_scope
     service_scope = shell_scope["image"]
@@ -33,8 +32,13 @@ def image_list_extr_scp_func(interpreter: OidInterpreter,
 def image_list_conj_res_func(
         this: OidDispatcher, other: OidDispatcher) -> OidDispatcher:
     if this.result and other.result:
-        reduced_results = itertools.chain(this.result[1], other.result[1])
-        other.result = (other.result[0], reduced_results)
+        # add cloud name to each result before aggregation
+        aggregated_labels = ("Cloud",) + other.result[0]
+        this_generator = ((this.endpoint,) + i for i in this.result[1])
+        other_generator = ((other.endpoint,) + o for o in other.result[1])
+        aggregated_results = itertools.chain(this_generator, other_generator)
+        other.result = (aggregated_labels, aggregated_results)
+
     return other
 
 

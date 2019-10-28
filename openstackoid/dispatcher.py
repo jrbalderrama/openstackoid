@@ -27,8 +27,8 @@ FILTERED_KEYS = (ast.Load, ast.And, ast.Or, ast.BitOr, ast.BitAnd, ast.BitXor)
 T = TypeVar("T")
 
 
-def _str(node: ast.AST) -> Optional[str]:
-    name = None
+def _str(node: ast.AST) -> str:
+    name = ""
     if not isinstance(node, FILTERED_KEYS):
         if isinstance(node, ast.BoolOp):
             operator = node.op.__class__.__name__.lower()
