@@ -19,7 +19,6 @@ DEFAULT_CLOUD_NAME = "CloudOne"
 EXECUTION_SCOPE = "atomic_scope"
 
 
-# FIXME spell better and remove scheme
 SERVICES_CATALOG_PATH = "file:///etc/openstackoid/catalog.json"
 
 
