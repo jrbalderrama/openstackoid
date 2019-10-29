@@ -146,20 +146,27 @@ def get_admin_keystone_client(cloud_auth_url, cloud_name, os_scope, log):
         A triplet (Auth, Session, _identity.Server)
 
     """
-    if cloud_auth_url not in K_CLIENTS:
-        auth = make_admin_auth(cloud_auth_url, log)
-        sess = Session(auth=auth, additional_headers={"X-Scope": os_scope})
-        k_client = make_keystone_client(cloud_name, sess, os_scope, log)
-        log.info("Lazy client created at: {}".format(K_CLIENTS))
-        K_CLIENTS[cloud_auth_url] = (auth, sess, k_client)
-    else:
-        log.info(f"Client was NOT created reusing using key {cloud_auth_url}")
-        log.debug("List of clients: {}".format(K_CLIENTS))
 
-    return K_CLIENTS[cloud_auth_url]
+    auth = make_admin_auth(cloud_auth_url, log)
+    sess = Session(auth=auth, additional_headers={"X-Scope": os_scope})
+    k_client = make_keystone_client(cloud_name, sess, os_scope, log)
+
+    return (auth, sess, k_client)
+
+    # if cloud_auth_url not in K_CLIENTS:
+    #     auth = make_admin_auth(cloud_auth_url, log)
+    #     sess = Session(auth=auth, additional_headers={"X-Scope": os_scope})
+    #     k_client = make_keystone_client(cloud_name, sess, os_scope, log)
+    #     K_CLIENTS[cloud_auth_url] = (auth, sess, k_client)
+    # else:
+    #     log.info(f"Client was NOT created reusing using key {cloud_auth_url}")
+    #     log.debug(f"List of clients: {K_CLIENTS.keys()}")
+    #
+    # return K_CLIENTS[cloud_auth_url]
 
 
 def target_good_keystone(f):
+
     @functools.wraps(f)
     def wrapper(cls, request):
         """Wrapper of __call__ of a BaseAuthProtocol middleware.
@@ -182,10 +189,11 @@ def target_good_keystone(f):
         # configuration file) and `cloud_auth_url` is the keystone URL of
         # the targeted cloud.
         original_auth_url = kls._conf.get('auth_url')
-        cloud_auth_url = request.headers.get('X-Identity-Url',
+        request_headers = request.headers
+        cloud_auth_url = request_headers.get('X-Identity-Url',
                                              original_auth_url)
-        cloud_name = request.headers.get('X-Identity-Cloud')
-        os_scope = request.headers.get('X-Scope')
+        cloud_name = request_headers.get('X-Identity-Cloud')
+        os_scope = request_headers.get('X-Scope')
 
         # Get the proper Keystone client and unpdate `kls` middleware in
         # regards.
@@ -203,46 +211,4 @@ def target_good_keystone(f):
         kls._include_service_catalog = True
 
         return f(kls, request)
-
     return wrapper
-
-# # -- 🐒 Monkey Patching 🐒
-# from keystoneauth1.access import service_catalog as sc
-#
-# endpoint_data_for = sc.ServiceCatalog.endpoint_data_for
-# def mkeypatch_endpoint_data_for(cls, *args, **kwargs):
-#     """Don't filter the catalog on region name when looking for endpoint.
-#
-#     The `endpoint_data_for` method [1] of keystoneauth1 fetches endpoint data
-#     from the service catalog. This method may filter endpoints based on the
-#     region name. Thus, when a service such a Nova wanna contact Neutron, it
-#     uses that method to look into the catalog and only keep endpoints of
-#     Neutron in the same region (see, nova.network.neutronV2.api.get_client
-#     [2]).
-#
-#     However with OpenStackoïd, the Identity server of the current composition
-#     may be in a different region than Nova. This is the case when Alice start
-#     a VM with the following scope:
-#
-#       openstack server create ... --os-scope '{"identity": "CloudOne", "nova": "CloudTwo"}'
-#
-#     In this case, Keystone will return a scoped-token with a catalog made of
-#     endpoints in CloudOne. Hence, when Nova try to get the list of endpoints
-#     of its region, it fails with the error message:
-#
-#       ['internal', 'public'] endpoint for network service in CloudTwo region not found
-#
-#     With OpenStackoïd, the notion of regions doesn't really make sense since
-#     we permit collaboration between multiple regions. This monkey patch
-#     removes the region filtering when a service seeks for an endpoint in the
-#     service catalogue.
-#
-#     Refs:
-#       [1] https://github.com/openstack/keystoneauth/blob/8505f37124bb21f41e346a571057c8133f9ca4d5/keystoneauth1/access/service_catalog.py#L402
-#       [2] https://github.com/openstack/nova/blob/3310c3cbf534f5d75477ed206a8fb68eb53c6c10/nova/network/neutronv2/api.py#L203
-#
-#     """
-#     kwargs.update(region_name=None)
-#     return endpoint_data_for(cls, *args, **kwargs)
-#
-# sc.ServiceCatalog.endpoint_data_for = mkeypatch_endpoint_data_for
