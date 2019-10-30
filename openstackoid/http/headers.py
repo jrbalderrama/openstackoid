@@ -27,7 +27,7 @@ X_AUTH_TOKEN = "X-Auth-Token"
 X_IDENTITY_CLOUD = "X-Identity-Cloud"
 
 
-X_ITENTITY_URL = "X-Identity-Url"
+X_IDENTITY_URL = "X-Identity-Url"
 
 
 X_SCOPE = "X-Scope"

@@ -19,7 +19,7 @@ import json
 import logging
 
 from .http.headers import (SCOPE_DELIMITER, X_AUTH_TOKEN, X_IDENTITY_CLOUD,
-                           X_ITENTITY_URL, X_SCOPE, X_SUBJECT_TOKEN,
+                           X_IDENTITY_URL, X_SCOPE, X_SUBJECT_TOKEN,
                            sanitize_headers)
 from .utils import get_default_scope
 
@@ -257,7 +257,7 @@ class OidInterpreter:
 
                 request.headers.update({
                     X_IDENTITY_CLOUD: id_service.cloud,
-                    X_ITENTITY_URL: id_service.url
+                    X_IDENTITY_URL: id_service.url
                 })
             except StopIteration:
                 logging.error(f"Invalid identity scope: {identity_scope}")
