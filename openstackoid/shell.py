@@ -26,11 +26,10 @@ Adds `--oid-scope` global parameter:
 from osc_lib import shell
 
 import json
-import logging
 
 from .configuration import push_shell_scope
 from .http import request  # noqa
-from .utils import DEFAULT_CLOUD_NAME, get_default_scope
+from .utils import get_default_scope
 
 
 DEFAULT_API_VERSION = '1'
@@ -44,9 +43,6 @@ API_VERSION_OPTION = 'os_openstackoid_api_version'
 
 
 API_VERSIONS = {'1': 'openstackoid.shell'}
-
-
-logger = logging.getLogger(__name__)
 
 
 # Required by the OSC plugin interface
@@ -63,9 +59,7 @@ def build_option_parser(parser):
     """
 
     def _fmt_doc(service_name):
-        return (
-            f"{DEFAULT_CLOUD_NAME} "
-            f"(Env: OS_SCOPE_{service_name.upper()} | OS_REGION_NAME)")
+        return (f"(Env: OS_SCOPE_{service_name.upper()} | OS_REGION_NAME)")
 
     parser.add_argument(
         '--oid-scope',
@@ -112,7 +106,6 @@ def _os_shell_monkey_patch(cls, argv):
             raise ValueError(error_msg)
 
     push_shell_scope(final_scope)
-    logger.info("Save the current oid-scope parameter: ", final_scope)
     cls.options.oid_scope = final_scope
     return initialize_app(cls, argv)
 

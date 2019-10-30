@@ -13,36 +13,23 @@ from typing import Any, Callable, Dict, Optional, Tuple, Type
 import functools
 import inspect
 
-from .configuration import DEFAULT_CLOUD_NAME
 
-
-def _get_os_scope_service_env(service_name: str, cloud_name: str) -> str:
-    env_name = f"OS_SCOPE_{service_name.upper()}"
-    value = environ.get(env_name)
-    if value is None:
-        value = environ.get("OS_REGION_NAME", cloud_name)
-
-    return value
-
-
-def _get_os_scope_service_env2(service_name: str,
-                               cloud_name: str) -> Optional[str]:
+def _get_os_scope_service_env(service_name: str) -> Optional[str]:
     env_name = f"OS_SCOPE_{service_name.upper()}"
     value = environ.get(env_name)
     if not value:
-        value = environ.get("OS_REGION_NAME", cloud_name)
+        value = environ.get("OS_REGION_NAME")
 
     return value
 
 
-# adding optional argument to set it in the client
-def get_default_scope(cloud_name: str = DEFAULT_CLOUD_NAME) -> Dict[str, str]:
+def get_default_scope() -> Dict[str, str]:
     return {
-        "compute": _get_os_scope_service_env("compute", cloud_name),
-        "identity": _get_os_scope_service_env("identity", cloud_name),
-        "image": _get_os_scope_service_env("image", cloud_name),
-        "network": _get_os_scope_service_env("network", cloud_name),
-        "placement": _get_os_scope_service_env("placement", cloud_name)
+        "compute": _get_os_scope_service_env("compute"),
+        "identity": _get_os_scope_service_env("identity"),
+        "image": _get_os_scope_service_env("image"),
+        "network": _get_os_scope_service_env("network"),
+        "placement": _get_os_scope_service_env("placement")
     }
 
 

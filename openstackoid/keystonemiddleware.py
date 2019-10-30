@@ -151,18 +151,16 @@ def get_admin_keystone_client(cloud_auth_url, cloud_name, os_scope, log):
     sess = Session(auth=auth, additional_headers={"X-Scope": os_scope})
     k_client = make_keystone_client(cloud_name, sess, os_scope, log)
 
-    return (auth, sess, k_client)
+    if cloud_auth_url not in K_CLIENTS:
+        auth = make_admin_auth(cloud_auth_url, log)
+        sess = Session(auth=auth, additional_headers={"X-Scope": os_scope})
+        k_client = make_keystone_client(cloud_name, sess, os_scope, log)
+        K_CLIENTS[cloud_auth_url] = (auth, sess, k_client)
+    else:
+        log.info(f"Client was NOT created reusing using key {cloud_auth_url}")
+        log.debug(f"List of clients: {K_CLIENTS.keys()}")
 
-    # if cloud_auth_url not in K_CLIENTS:
-    #     auth = make_admin_auth(cloud_auth_url, log)
-    #     sess = Session(auth=auth, additional_headers={"X-Scope": os_scope})
-    #     k_client = make_keystone_client(cloud_name, sess, os_scope, log)
-    #     K_CLIENTS[cloud_auth_url] = (auth, sess, k_client)
-    # else:
-    #     log.info(f"Client was NOT created reusing using key {cloud_auth_url}")
-    #     log.debug(f"List of clients: {K_CLIENTS.keys()}")
-    #
-    # return K_CLIENTS[cloud_auth_url]
+    return K_CLIENTS[cloud_auth_url]
 
 
 def target_good_keystone(f):

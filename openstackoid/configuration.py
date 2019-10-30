@@ -13,9 +13,6 @@ import copy
 import threading
 
 
-DEFAULT_CLOUD_NAME = "CloudOne"
-
-
 EXECUTION_SCOPE = "atomic_scope"
 
 

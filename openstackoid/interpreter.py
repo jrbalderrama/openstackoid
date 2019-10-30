@@ -21,7 +21,6 @@ import logging
 from .http.headers import (SCOPE_DELIMITER, X_AUTH_TOKEN, X_IDENTITY_CLOUD,
                            X_IDENTITY_URL, X_SCOPE, X_SUBJECT_TOKEN,
                            sanitize_headers)
-from .utils import get_default_scope
 
 logger = logging.getLogger(__name__)
 
@@ -104,37 +103,30 @@ class OidInterpreter:
             logging.info(f"Scoped URL service: {service}")
             return service
 
-    def get_scope(self, request: Request) -> Scope:
-        """Find the `Scope` from a `Request` or set one by default.
+    def get_scope(self, request: Request) -> Optional[Scope]:
+        """Find the `Scope` from a `Request`.
+
         Seek for the `Scope` in headers of `request`. First, look into the
         header 'X-Scope', then into header 'X-Auth-Token' delimited by
-        `SCOPE_DELIMITER`. Return either the scope if found or scope
-        containing the default values of the local cloud.
+        `SCOPE_DELIMITER`. and return if any.
+
         """
 
-        final_scope = get_default_scope()
+        current_scope = None
         headers = sanitize_headers(request.headers)
         if X_SCOPE in headers:
             scope_value = headers[X_SCOPE]
             current_scope = json.loads(scope_value)
-            final_scope = dict(final_scope, **current_scope)
-            x_scope = json.dumps(final_scope)
-            request.headers.update({X_SCOPE: x_scope})
-            logging.debug("Set scope from X-Scope")
+            logging.debug("Get scope from X-Scope")
         if X_AUTH_TOKEN in headers:
             token = headers[X_AUTH_TOKEN]
             if SCOPE_DELIMITER in token:
                 token, scope_value = token.split(SCOPE_DELIMITER)
                 current_scope = json.loads(scope_value)
-                final_scope = dict(final_scope, **current_scope)
-                logging.debug("Set scope from X-Auth-Token")
+                logging.debug("Get scope from X-Auth-Token")
 
-            scope_value = json.dumps(final_scope)
-            x_auth_token = f"{token}{SCOPE_DELIMITER}{scope_value}"
-            request.headers.update({X_AUTH_TOKEN: x_auth_token})
-
-        logging.info(f"Scope from headers: {final_scope}")
-        return final_scope
+        logging.info(f"Scope from headers: {current_scope}")
+        return current_scope
 
     def get_scope2(self, request: Request) -> Optional[Scope]:
         """Find the `Scope` from a `Request`.
@@ -244,8 +236,7 @@ class OidInterpreter:
         # helpful headers to tweak the Keystone middleware.
         #
         # The system env var OS_REGION_NAME must be defined to get the proper
-        # default scope, otherwise DEFAULT_CLOUD_NAME is set from
-        # openstackoid.configuration
+        # default scope
         if targeted_service_type == "identity":
             identity_scope = scope["identity"]
             try:
