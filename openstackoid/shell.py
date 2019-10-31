@@ -26,6 +26,7 @@ Adds `--oid-scope` global parameter:
 from osc_lib import shell
 
 import json
+import logging
 
 from .configuration import push_shell_scope
 from .http import request  # noqa
@@ -43,6 +44,11 @@ API_VERSION_OPTION = 'os_openstackoid_api_version'
 
 
 API_VERSIONS = {'1': 'openstackoid.shell'}
+
+# Hack to avoid verbose executions without flags.
+logger = logging.getLogger()
+while logger.handlers:
+    logger.handlers.pop()
 
 
 # Required by the OSC plugin interface
