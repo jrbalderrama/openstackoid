@@ -1,8 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 SUDO_CMD="sudo --set-home"
 PIP_INSTALL_OPTS="--no-deps --no-cache-dir --editable"
-EASY_INSTALL_OPTS="-H None -m"
 
 OS_BASE_DIR=/opt/stack
 OID_BASE_DIR=/opt/opendev
@@ -22,18 +21,14 @@ set -x
 
 if [ -z "$1" ]
 then
-    ${SUDO_CMD} pip install ${PIP_INSTALL_OPTS} ${OID_BASE_PATH}${OID_CORE}
+    ${SUDO_CMD} pip install --no-cache-dir --editable ${OID_BASE_PATH}${OID_CORE}
     shopt -s nullglob
     for module in ${SRC_MODULES[@]}
     do
         ${SUDO_CMD} pip uninstall --yes $module
-        # required to update easy-install.pth file in dist-packages
-        ${SUDO_CMD} easy_install ${EASY_INSTALL_OPTS} $module > /dev/null 2>&1
-        # for alt_egg in ${DIST_PACKAGES_PATH}${module//-/_}*egg
-        # do
-        #     [ -d $alt_egg ] && ${SUDO_CMD} rm -rf $alt_egg
-        # done
-        # required in ubuntu because the package is not uninstalled
+        # Update easy-install.pth file in dist-packages
+        ${SUDO_CMD} sed -i "/${module}/d" ${DIST_PACKAGES_PATH}easy-install.pth
+        # Remove egg because in Ubuntu the package is not uninstalled
         egg="${DIST_PACKAGES_PATH}${module}.egg-link"
         [ -f $egg ] && ${SUDO_CMD} rm -f $egg
         egg_info="${OS_BASE_PATH}${module}/${module//-/_}.egg-info"
@@ -43,7 +38,7 @@ then
     shopt -u nullglob
 else
     ${SUDO_CMD} pip uninstall --yes ${OID_CORE}
-    ${SUDO_CMD} easy_install ${EASY_INSTALL_OPTS} ${OID_CORE} > /dev/null 2>&1
+    ${SUDO_CMD} sed -i "/${OID_CORE}/d" ${DIST_PACKAGES_PATH}easy-install.pth
     egg="${DIST_PACKAGES_PATH}${OID_CORE}.egg-link"
     [ -f $egg ] && ${SUDO_CMD} rm -f $egg
     egg_info="${OID_BASE_PATH}${OID_CORE}/${OID_CORE}.egg-info"
