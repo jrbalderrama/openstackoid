@@ -22,6 +22,7 @@ from .http.headers import (SCOPE_DELIMITER, X_AUTH_TOKEN, X_IDENTITY_CLOUD,
                            X_IDENTITY_URL, X_SCOPE, X_SUBJECT_TOKEN,
                            sanitize_headers)
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -100,7 +101,7 @@ class OidInterpreter:
             service = self.lookup_service(
                 lambda s: request.url.startswith(s.url))
         finally:
-            logging.info(f"Scoped URL service: {service}")
+            logging.debug(f"Scoped URL service: {service}")
             return service
 
     def get_scope(self, request: Request) -> Optional[Scope]:
@@ -113,7 +114,10 @@ class OidInterpreter:
         """
 
         current_scope = None
+        logger.info(request.url)
+        logger.info(request.headers)
         headers = sanitize_headers(request.headers)
+
         if X_SCOPE in headers:
             scope_value = headers[X_SCOPE]
             current_scope = json.loads(scope_value)
@@ -125,33 +129,40 @@ class OidInterpreter:
                 current_scope = json.loads(scope_value)
                 logging.debug("Get scope from X-Auth-Token")
 
-        logging.info(f"Scope from headers: {current_scope}")
+        if not current_scope:
+            logging.warning("Any scope found in headers")
+        else:
+            logging.debug(f"Scope from headers: {current_scope}")
+
         return current_scope
 
-    def get_scope2(self, request: Request) -> Optional[Scope]:
-        """Find the `Scope` from a `Request`.
-
-        Seek for the `Scope` in headers of `request`. First, look into the
-        header 'X-Scope', then into header 'X-Auth-Token' delimited by
-        `SCOPE_DELIMITER`. and return if any..
-
-        """
-
-        current_scope = None
+    def get_scope_faulty(self, request: Request) -> Optional[Scope]:
+        from .utils import get_default_scope
+        logger.info(request.url)
+        logger.info(request.headers)
+        final_scope = get_default_scope()
         headers = sanitize_headers(request.headers)
         if X_SCOPE in headers:
             scope_value = headers[X_SCOPE]
             current_scope = json.loads(scope_value)
-            logging.debug("Get scope from X-Scope")
+            final_scope = dict(final_scope, **current_scope)
+            x_scope = json.dumps(final_scope)
+            request.headers.update({X_SCOPE: x_scope})
+            logging.debug("Set scope from X-Scope")
         if X_AUTH_TOKEN in headers:
             token = headers[X_AUTH_TOKEN]
             if SCOPE_DELIMITER in token:
                 token, scope_value = token.split(SCOPE_DELIMITER)
                 current_scope = json.loads(scope_value)
-                logging.debug("Get scope from X-Auth-Token")
+                final_scope = dict(final_scope, **current_scope)
+                logging.debug("Set scope from X-Auth-Token")
 
-        logging.info(f"Scope from headers: {current_scope}")
-        return current_scope
+            scope_value = json.dumps(final_scope)
+            x_auth_token = f"{token}{SCOPE_DELIMITER}{scope_value}"
+            request.headers.update({X_AUTH_TOKEN: x_auth_token})
+
+        logging.info(f"Scope from headers: {final_scope}")
+        return final_scope
 
     def clean_token_header(self, request: Request,
                            token_header_name: str) -> None:
@@ -170,7 +181,7 @@ class OidInterpreter:
             if SCOPE_DELIMITER in auth_token:
                 token, _ = auth_token.split(SCOPE_DELIMITER)
                 request.headers.update({token_header_name: token})
-                logging.info(f"Revert '{token_header_name}' to {token}")
+                logging.debug(f"Revert '{token_header_name}' to {token}")
 
     def get_service_scope(self, request: Request) -> Optional[Tuple]:
         """Get the service scope of a targeted service.
@@ -212,7 +223,7 @@ class OidInterpreter:
         # i.e., scope without operators) the cloud endpoint is the name of the
         # identifier set in the scope of the original scoped/targeted service.
         targeted_cloud = endpoint if endpoint else scope[targeted_service_type]
-        logging.info(f"Effective endpoint: {targeted_cloud}")
+        logging.debug(f"Effective endpoint: {targeted_cloud}")
 
         # From targeted cloud, find the targeted service
         targeted_service = self.lookup_service(
@@ -233,7 +244,7 @@ class OidInterpreter:
         request.headers.update({X_SCOPE: json.dumps(scope)})
 
         # HACK: Find the identity service. This part is used later to add
-        # helpful headers to tweak the Keystone middleware.
+        # helpful headers to tweak the `keystonemiddleware`.
         #
         # The system env var OS_REGION_NAME must be defined to get the proper
         # default scope
@@ -250,6 +261,8 @@ class OidInterpreter:
                     X_IDENTITY_CLOUD: id_service.cloud,
                     X_IDENTITY_URL: id_service.url
                 })
+                logger.debug(f"Update headers {X_IDENTITY_CLOUD} "
+                             f"and {X_IDENTITY_URL}")
             except StopIteration:
                 logging.error(f"Invalid identity scope: {identity_scope}")
                 raise ValueError

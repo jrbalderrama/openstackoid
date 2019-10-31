@@ -13,6 +13,7 @@ import json
 import logging
 
 from .headers import SCOPE_DELIMITER, X_AUTH_TOKEN, X_SCOPE, sanitize_headers
+from .hooks import print_request_info
 from ..configuration import get_shell_scope, get_execution_scope
 
 
@@ -52,7 +53,9 @@ def _session_request_monkey_patch(cls, method, url, **kwargs) -> Response:
     logger.debug(f"Piggyback headers with the scope: {repr(headers)}")
 
     # Update kwargs with popped headers for proper request dispatch
-    return session_request(cls, method, url, headers=headers, **kwargs)
+    return session_request(cls, method, url,
+                           hooks={"response": print_request_info},
+                           headers=headers, **kwargs)
 
 
 Session.request = _session_request_monkey_patch

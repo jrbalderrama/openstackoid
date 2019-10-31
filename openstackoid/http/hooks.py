@@ -7,18 +7,15 @@
 # Make your OpenStacks Collaborative
 
 
-from requests import Session
-
 import logging
 
-from .configuration import SERVICES_CATALOG_PATH
-from .interpreter import get_interpreter
-from .http.send import send_scope
+from requests import Response
 
 
 logger = logging.getLogger(__name__)
 
 
-interpreter = get_interpreter(SERVICES_CATALOG_PATH)
-logger.warning("Monkey patching 'Session.send'")
-Session.send = send_scope(interpreter)(Session.send)
+def print_request_info(response: Response, *arguments, **keywords):
+    logger.debug(f"Request url: {response.request.url}")
+    logger.debug(f"Request headers: {response.request.headers}")
+    logger.debug(f"Response status: {response.status_code}")

@@ -128,7 +128,7 @@ class OidDispatcher(Generic[T]):
         func = print_func_signature(self.func)
         result: T = func(*args, **kwargs)
         pop_execution_scope()
-        logger.debug(result)
+        # logger.debug(result)
         return result
 
 
@@ -154,7 +154,7 @@ class ScopeTransformer(ast.NodeTransformer, Generic[T]):
         self.keywords = keywords
 
     def visit_Name(self, node):
-        logger.info(f"Processing '{node.id}'")
+        logger.debug(f"Processing '{node.id}'")
         return OidDispatcher(self.interpreter,
                              self.service_type,
                              node.id,
@@ -176,9 +176,9 @@ class ScopeTransformer(ast.NodeTransformer, Generic[T]):
             left = node.left if hasattr(node, 'left') else node.right
             right = OidDispatcher(None, None, lambda x: x, lambda x: False)
 
-        logger.debug(f"Evaluating ({left} {operator[2:-2]} {right})")
         result = getattr(left, operator)(right)
-        logger.info(f"Evaluation result: {result}")
+        logger.debug(f"Evaluation: [{result}] "
+                     f"({left} {operator[2:-2]} {right})")
         return result
 
 
@@ -206,11 +206,10 @@ def scope(interpreter: OidInterpreter,
 
         @functools.wraps(func)
         def wrapper(*arguments, **keywords):
-            logger.warning(f"Scoping '{func.__name__}' method")
+            # logger.warning(f"Scoping '{func.__name__}' method")
             service_type, scope = extr_scp_func(interpreter,
                                                 *arguments, **keywords)
             tree = ast.parse(scope, mode='eval')
-            # logger.debug(f"\t= {_dump(tree)}")
             _visit(tree.body)
             dispatcher: OidDispatcher[T] = ScopeTransformer[T](
                 interpreter,
@@ -221,7 +220,7 @@ def scope(interpreter: OidInterpreter,
                 disj_res_func,
                 conj_res_func,
                 *arguments, **keywords).visit(tree.body)
-            logger.info(f"\t= {dispatcher}")
+            # logger.info(f"\t= {dispatcher}")
             return dispatcher.result if dispatcher else None
         return wrapper
     return decorator

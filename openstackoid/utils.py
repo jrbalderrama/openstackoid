@@ -12,6 +12,10 @@ from typing import Any, Callable, Dict, Optional, Tuple, Type
 
 import functools
 import inspect
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 def _get_os_scope_service_env(service_name: str) -> Optional[str]:
@@ -62,16 +66,19 @@ def _retrieve_name(variable: Any) -> str:
     return [_name for _name, _value in local_variables if _value is variable]
 
 
-# TODO add hooks for requests (comlementary and specific to this)
 def print_func_signature(func: Callable):
     """Print the signature of a method including its parameters.
 
     """
+
     @functools.wraps(func)
     def wrapper(*arguments, **keywords):
-        signature = inspect.getargspec(func)
-        print(signature)
-        # print(f"Executing: {func.__name__}")
+        # inspect.signature() or inspect.getfullargspec()
+        logger.debug(f"Executing function: "
+                     f"{func.__module__}.{func.__qualname__}")
+        parameters = inspect.signature(func).parameters.keys()
+        signature = zip(parameters, arguments)
+        logger.debug(f"Function signature: {list(signature)}")
         # if arguments:
         #     print("... with arguments")
         #     for argument in arguments:

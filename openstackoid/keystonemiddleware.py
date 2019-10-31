@@ -147,17 +147,15 @@ def get_admin_keystone_client(cloud_auth_url, cloud_name, os_scope, log):
 
     """
 
-    auth = make_admin_auth(cloud_auth_url, log)
-    sess = Session(auth=auth, additional_headers={"X-Scope": os_scope})
-    k_client = make_keystone_client(cloud_name, sess, os_scope, log)
-
     if cloud_auth_url not in K_CLIENTS:
         auth = make_admin_auth(cloud_auth_url, log)
         sess = Session(auth=auth, additional_headers={"X-Scope": os_scope})
         k_client = make_keystone_client(cloud_name, sess, os_scope, log)
+        log.info(f"Lazy client created for key '{cloud_auth_url}'")
         K_CLIENTS[cloud_auth_url] = (auth, sess, k_client)
     else:
-        log.info(f"Client was NOT created reusing using key {cloud_auth_url}")
+        log.info(f"Client was NOT created "
+                 f"reusing using client with key {cloud_auth_url}")
         log.debug(f"List of clients: {K_CLIENTS.keys()}")
 
     return K_CLIENTS[cloud_auth_url]
@@ -181,6 +179,7 @@ def target_good_keystone(f):
         """
         # Make a copy of the middleware cloud every-time someone process a
         # request for thread safety (since we change its state).
+        cls.log.warning("Openstackoid decorating keystonemiddleware")
         kls = copy.copy(cls)
 
         # `original_auth_url` is the default keystone URL (as in the
