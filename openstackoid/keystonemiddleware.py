@@ -58,10 +58,6 @@ from keystoneauth1.session import Session
 from keystonemiddleware.auth_token import _identity
 
 
-# Keystone clients
-K_CLIENTS = {}
-
-
 def make_admin_auth(cloud_auth_url, log):
     """Build a new Authentication plugin for admin (Password based).
 
@@ -147,18 +143,11 @@ def get_admin_keystone_client(cloud_auth_url, cloud_name, os_scope, log):
 
     """
 
-    if cloud_auth_url not in K_CLIENTS:
-        auth = make_admin_auth(cloud_auth_url, log)
-        sess = Session(auth=auth, additional_headers={"X-Scope": os_scope})
-        k_client = make_keystone_client(cloud_name, sess, os_scope, log)
-        log.info(f"Lazy client created for key '{cloud_auth_url}'")
-        K_CLIENTS[cloud_auth_url] = (auth, sess, k_client)
-    else:
-        log.info(f"Client was NOT created "
-                 f"reusing using client with key {cloud_auth_url}")
-        log.debug(f"List of clients: {K_CLIENTS.keys()}")
-
-    return K_CLIENTS[cloud_auth_url]
+    auth = make_admin_auth(cloud_auth_url, log)
+    sess = Session(auth=auth, additional_headers={"X-Scope": os_scope})
+    k_client = make_keystone_client(cloud_name, sess, os_scope, log)
+    log.info(f"Lazy client created for key '{cloud_auth_url}'")
+    return (auth, sess, k_client)
 
 
 def target_good_keystone(f):
