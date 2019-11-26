@@ -21,57 +21,26 @@ from .utils import print_func_signature
 logger = logging.getLogger(__name__)
 
 
+# List of AST types used to parse a scope, others are ignored during the visit
 FILTERED_KEYS = (ast.Load, ast.And, ast.Or, ast.BitOr, ast.BitAnd, ast.BitXor)
 
 
 T = TypeVar("T")
 
 
-def _str(node: ast.AST) -> str:
-    name = ""
-    if not isinstance(node, FILTERED_KEYS):
-        if isinstance(node, ast.BoolOp):
-            operator = node.op.__class__.__name__.lower()
-            values = ", ".join(_str(x) for x in node.values)
-            name = f"{operator}({values})"
-        elif isinstance(node, ast.BinOp):
-            operator = node.op.__class__.__name__.lower()[3:]
-            left = _str(node.left)
-            right = _str(node.right)
-            name = f"({left} {operator} {right})"
-        elif isinstance(node, ast.Name):
-            name = node.id
-        else:
-            raise TypeError
-
-    return name
-
-
-def _dump(node) -> str:
-    return ast.dump(node,
-                    annotate_fields=True,
-                    include_attributes=False)
-
-
-def _visit(node: ast.Expression, offset=0, verbose=False) -> None:
-    if isinstance(node, ast.AST):
-        name = _str(node)
-        if name:
-            if name.startswith("(") and name.endswith(')'):
-                name = name[1:-1]
-            level = "" if offset == 0 else f"{offset} "
-            details = " - " + _dump(node) if verbose else ""
-            logger.debug(f"{level}" + "_ " * offset + f"{name}{details}")
-
-        for field, value in ast.iter_fields(node):
-            if isinstance(value, list):
-                for item in value:
-                    _visit(item, offset=offset+1, verbose=verbose)
-            else:
-                _visit(value, offset=offset+1, verbose=verbose)
-
-
 class OidDispatcher(Generic[T]):
+    """Dispatch a function execution to the appropriate endpoint.
+
+    In OpenStackoïd it must be declared a simple/compound scope to parse and
+    then execute a function on the endpoint[s] interpreted in such scope. In the
+    case of OpenStack, for example, the scope is provided in the headers of a
+    HTTP request (see `OidIntepreter`). Once the scope is identified, it is
+    interpreted as a Python AST and then a function is executed according to the
+    scope. If the scope is compound, the function is executed on each declared
+    endpoint following the logic of the declared operator that is part of the
+    declared scope. Currently two binary operators are supported '&' and '|'.
+
+    """
 
     def __init__(
             self,
@@ -84,6 +53,23 @@ class OidDispatcher(Generic[T]):
             disj_res_func: Callable[..., T],
             conj_res_func: Callable[..., T],
             *arguments, **keywords):
+        """Initialize the attributes to execute a function in a target endpoint.
+
+        :param interpreter: Instance of the scope interpreter
+        :param service_type: Type of the target service declared in the scope
+        :param endpoint: Name of the endpoint in which the function is executed
+        :param func: Function to execute (from the `scope` decorator)
+        :param bool_evl_func: Method to evaluate the truth value of the `result`
+           property
+        :param args_xfm_func: Method to transform the original arguments of the
+           scoped function
+        :param disj_res_func: Method to evaluate the binary arithmetic
+           `__or__` operation of the `result` property
+        :param conj_res_fun: Method to evaluate the binary arithmetic
+           `__and__` operation of the `result` property
+
+        """
+
         self.interpreter = interpreter
         self.service_type = service_type
         self.endpoint = endpoint
@@ -94,6 +80,8 @@ class OidDispatcher(Generic[T]):
         self.conj_res_func = conj_res_func
         self.arguments = arguments
         self.keywords = keywords
+
+        # Result property. It is initialized on demand only
         self._result: Optional[T] = None
 
     @property
@@ -117,22 +105,46 @@ class OidDispatcher(Generic[T]):
         return self.conj_res_func(self, other)
 
     def __str__(self):
-        # return str(self.result)
         return f"{self.endpoint}" if self.endpoint else "None"
 
     def run_func(self) -> Optional[T]:
+        """Execute the `func` according to the target scope.
+
+        This method performs all the logic behind the interpretation and
+        dispatching the execution declared in a (execution/atomic) scope.
+
+        """
+
+        # 1. Process (transform) the arguments of the function to execute
         args, kwargs = self.args_xfm_func(self.interpreter, self.endpoint,
                                           *self.arguments, **self.keywords)
         execution_scope = (self.service_type, self.endpoint)
+
+        # 2. Store the execution scope in a local context
         push_execution_scope(execution_scope)
+
+        # helper print (read-only) decorator for logging
         func = print_func_signature(self.func)
+
+        # 3. Execute the function with the proper attributes
         result: T = func(*args, **kwargs)
+
+        # 4. Release (free) the scope from local context
         pop_execution_scope()
-        # logger.debug(result)
         return result
 
 
 class ScopeTransformer(ast.NodeTransformer, Generic[T]):
+    """AST transformer class to evaluate a simple/compound OID scope.
+
+    An Openstackoïd scope is a valid Python expression of a given supported
+    type. This expression is parsed (visited) and transformed in a
+    `OidDispatcher`. Two types of expression are supported during evaluation of
+    the scope, 'Name' identifiers and 'Binary Operators'. During the scope
+    evaluation, execution of the method associated to the `OidDispatcher` is
+    executed in order to evaluate the truth value.
+
+    """
 
     def __init__(self,
                  interpreter: OidInterpreter,
@@ -143,6 +155,16 @@ class ScopeTransformer(ast.NodeTransformer, Generic[T]):
                  disj_res_func: Callable[..., OidDispatcher],
                  conj_res_func: Callable[..., OidDispatcher],
                  *arguments, **keywords):
+        """Constructor required to initalize OidDispatcher instance[s].
+
+        It requires an interpreter object to dispatch the execution to the
+        proper endpoint. It also requires the service type of the (execution)
+        scope that is processed. Additionally it is required all the parameters
+        to initialize an `OidDispatcher` (see documentation of the `scope`
+        decorator for details).
+
+        """
+
         self.interpreter = interpreter
         self.service_type = service_type
         self.func: Callable[..., T] = func
@@ -154,6 +176,11 @@ class ScopeTransformer(ast.NodeTransformer, Generic[T]):
         self.keywords = keywords
 
     def visit_Name(self, node):
+        """Process a simple scope (tree's leaf) as a Python AST.
+
+        :returns: A `OidDispatcher` instance representing the leaf.
+        """
+
         logger.debug(f"Processing '{node.id}'")
         return OidDispatcher(self.interpreter,
                              self.service_type,
@@ -166,9 +193,21 @@ class ScopeTransformer(ast.NodeTransformer, Generic[T]):
                              *self.arguments, **self.keywords)
 
     def visit_BinOp(self, node):
-        # Call 'super' method is required for implicit recursivity
+        """Process a compound scope (with operator[s]) as a Python AST.
+
+        This method is recursively executed by visiting all nodes until reaches
+        the leaves of the three.
+
+        :returns: A `OidDispatcher` instance representing the result of the
+            branch evaluation.
+
+        """
+
+        # call to the 'super' method is required for implicit recursivity
         super(ScopeTransformer, self).generic_visit(node)
         operator = "__{}__".format(node.op.__class__.__name__[3:].lower())
+
+        # check that there is left and right side before evaluating the nodes
         if hasattr(node, "left") and hasattr(node, "right"):
             left = node.left
             right = node.right
@@ -182,15 +221,22 @@ class ScopeTransformer(ast.NodeTransformer, Generic[T]):
         return result
 
 
+# Default (lambda) method for the truth evaluation of an OidDispatcher result.
 default_bool_evl_func = lambda dispatcher: True if dispatcher.result else False  # noqa
 
 
+# Default (lambda) method to transform the arguments of a 'scope' decorated
+# function, defaults to the same varargs and kwargs of the input.
 default_args_xfm_func = lambda interpreter, endpoint, *args, **kwargs: (args, kwargs)  # noqa
 
 
+# Default (lambda) method to evaluate the disjunction binary operation, by
+# default this method mimics the base `__or__` method behaviour
 default_disj_res_func = lambda this, other: this if this else other if other else None  # noqa
 
 
+# Default (lambda) method to evaluate the conjunction binary operation, by
+# default this method mimics the base `__and__` method behaviour.
 default_conj_res_func = lambda this, other: other if this and other else None  # noqa
 
 
@@ -201,16 +247,42 @@ def scope(interpreter: OidInterpreter,
                                   Tuple[Tuple, Dict]] = default_args_xfm_func,
           disj_res_func: Callable[..., OidDispatcher] = default_disj_res_func,
           conj_res_func: Callable[..., OidDispatcher] = default_conj_res_func):
+    """Wrapper method to pass attributes to the `scope` decorator.
+
+    Most of parameters include defaults and are required in order to create an
+    instance of a `OidDispatcher`, see the documentation of its constructor for
+    more details.
+
+    :param extr_scp_func: Method to extract the scope from
+
+    """
 
     def decorator(func: Callable):
+        """The `scope` decorator to dispatch a request to a target endpoint.
+
+        :param func: The scoped method
+
+        """
 
         @functools.wraps(func)
         def wrapper(*arguments, **keywords):
-            # logger.warning(f"Scoping '{func.__name__}' method")
-            service_type, scope = extr_scp_func(interpreter,
-                                                *arguments, **keywords)
+            """Wrapper implementing the `scope` decorator business logic.
+
+            :param arguments: varargs of the scoped method
+            :param keywords: kwargs of the scoped method
+
+            """
+
+            # 1. Extract the scope from the provider arguments
+            service_type, scope = extr_scp_func(
+                interpreter, *arguments, **keywords)
+
+            # 2. Parse the scope as an AST and evaluate the tree
             tree = ast.parse(scope, mode='eval')
-            _visit(tree.body)
+
+            # 3. Execute the provided function to the appropriate endpoint. The
+            # execution is implicit because is performed during the evaluation
+            # of the scope expression
             dispatcher: OidDispatcher[T] = ScopeTransformer[T](
                 interpreter,
                 service_type,
@@ -220,7 +292,8 @@ def scope(interpreter: OidInterpreter,
                 disj_res_func,
                 conj_res_func,
                 *arguments, **keywords).visit(tree.body)
-            # logger.info(f"\t= {dispatcher}")
+
+            # 4. return the result of the execution after the truth evaluation
             return dispatcher.result if dispatcher else None
         return wrapper
     return decorator
