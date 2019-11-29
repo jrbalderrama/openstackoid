@@ -116,6 +116,7 @@ def _os_shell_monkey_patch(cls, argv):
     return initialize_app(cls, argv)
 
 
+# override the actual method
 shell.OpenStackShell.initialize_app = _os_shell_monkey_patch
 
 

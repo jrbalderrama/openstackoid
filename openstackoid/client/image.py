@@ -17,20 +17,42 @@ from ..dispatcher import OidDispatcher, scope
 from ..interpreter import OidInterpreter
 
 
+SERVICE_TYPE = "image"
+
 logger = logging.getLogger(__name__)
 
 
 def image_list_extr_scp_func(interpreter: OidInterpreter,
                              *arguments, **keywords) -> Optional[Tuple]:
+    """Extract the execution scope of a 'image' service from arguments.
+
+    In terms of the OS client the scope is collected from the command line
+    options passed to an `openstackclient.image.v2.image.ListImage` instance
+    initialized in the scoped method during the execution of the `take_action`
+    method.
+
+    """
+
     context = arguments[0]
     shell_scope = context.app.options.oid_scope
-    service_scope = shell_scope["image"]
+    service_scope = shell_scope[SERVICE_TYPE]
     logger.info(f"Service scope: '{service_scope}'")
-    return "image", service_scope
+    return SERVICE_TYPE, service_scope
 
 
 def image_list_conj_res_func(
         this: OidDispatcher, other: OidDispatcher) -> OidDispatcher:
+    """Aggregate results of the 'and' operator for the 'image list' command.
+
+    Apply the aggregation after execution of the command with a compound, and
+    conjunctive scope by merging the list of each endpoint. Also add an extra
+    column 'Cloud' with the name of the endpoint.
+
+    In terms of the OS client (thought the cliff library) this is a wrapper for
+    a `osc_lib.command.Lister` instance.
+
+    """
+
     if this.result and other.result:
         # add cloud name to each result before aggregation
         aggregated_labels = ("Cloud",) + other.result[0]
@@ -42,6 +64,7 @@ def image_list_conj_res_func(
     return other
 
 
+# Partial function of the scope decorator for the 'image list' operation.
 image_list_scope = functools.partial(scope,
                                      extr_scp_func=image_list_extr_scp_func,
                                      conj_res_func=image_list_conj_res_func)

@@ -13,12 +13,15 @@ import copy
 import threading
 
 
+# Name of the execution (atomic) scope
 EXECUTION_SCOPE = "atomic_scope"
 
 
+# Path on the devstack host of the openstackoid services catalog.
 SERVICES_CATALOG_PATH = "file:///etc/openstackoid/catalog.json"
 
 
+# Local storage stack
 __local_context = threading.local()
 
 
@@ -51,8 +54,7 @@ def push_shell_scope(value: dict) -> None:
 
 
 def get_execution_scope() -> Optional[tuple]:
-    """
-    Get latest execution scope from the stack without pop it out.
+    """Get latest execution scope from the stack without pop it out.
 
     """
 
@@ -61,8 +63,8 @@ def get_execution_scope() -> Optional[tuple]:
 
 
 def push_execution_scope(value: tuple) -> None:
-    """
-    Add an execution scope on the stack.
+    """Add an execution scope on the stack.
+
     """
 
     if not isinstance(value, tuple):
@@ -82,8 +84,7 @@ def push_execution_scope(value: tuple) -> None:
 
 
 def pop_execution_scope() -> Optional[tuple]:
-    """
-    Remove latest execution scope from the stack and return it.
+    """Remove latest execution scope from the stack and return it.
 
     """
 

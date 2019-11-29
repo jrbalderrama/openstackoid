@@ -16,6 +16,13 @@ logger = logging.getLogger(__name__)
 
 
 def print_request_info(response: Response, *arguments, **keywords):
+    """Print hook of a `Response` instance.
+
+    Log the target address, headers and execution status of a request.
+    This method works as a hook when the request is dispatched.
+
+    """
+
     logger.debug(f"Request url: {response.request.url}")
     logger.debug(f"Request headers: {response.request.headers}")
     logger.debug(f"Response status: {response.status_code}")

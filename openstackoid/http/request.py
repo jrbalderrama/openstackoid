@@ -58,4 +58,5 @@ def _session_request_monkey_patch(cls, method, url, **kwargs) -> Response:
                            headers=headers, **kwargs)
 
 
+# Override the Session.request method with the monkey patch
 Session.request = _session_request_monkey_patch
