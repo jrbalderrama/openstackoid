@@ -45,8 +45,7 @@ def image_list_conj_res_func(
     """Aggregate results of the 'and' operator for the 'image list' command.
 
     Apply the aggregation after execution of the command with a compound, and
-    conjunctive scope by merging the list of each endpoint. Also add an extra
-    column 'Cloud' with the name of the endpoint.
+    conjunctive scope by merging the list of each endpoint.
 
     In terms of the OS client (thought the cliff library) this is a wrapper for
     a `osc_lib.command.Lister` instance.
@@ -54,10 +53,9 @@ def image_list_conj_res_func(
     """
 
     if this.result and other.result:
-        # add cloud name to each result before aggregation
-        aggregated_labels = ("Cloud",) + other.result[0]
-        this_generator = ((this.endpoint,) + i for i in this.result[1])
-        other_generator = ((other.endpoint,) + o for o in other.result[1])
+        aggregated_labels = other.result[0]
+        this_generator = this.result[1]
+        other_generator = other.result[1]
         aggregated_results = itertools.chain(this_generator, other_generator)
         other.result = (aggregated_labels, aggregated_results)
 
